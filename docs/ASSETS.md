@@ -1,8 +1,8 @@
 # Assets: where the handmade look comes from
 
-*Status: proposal. The route isn't decided yet.*
+*Status: decided. The garden study is fully procedural and was built by Claude at my request (see [RECIPE.md](RECIPE.md#who-made-what)). The original scenes follow option D below, with my own photographs and drawings.*
 
-No AI-generated imagery anywhere in this project. Every texture is a photo I took, every shape is drawn or cut by hand, and the procedural parts are code I wrote. The README will say which is which, layer by layer.
+No AI-generated imagery in the original scenes. Every texture will be a photo I took, every shape drawn or cut by hand, and the procedural parts are code. The README will say which is which, layer by layer.
 
 ## The options
 

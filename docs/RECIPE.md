@@ -1,8 +1,8 @@
 # Recipe: the garden backdrop study
 
-*This is a study of a looping backdrop from a podcast set: [show name and artists, to be filled in]. I'm not affiliated with the show or the people who made the backdrop. The study is the learning step. The original scenes I make afterwards are the actual project.*
+*This is a study of a looping backdrop made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it or with her. The study is the learning step. The original scenes I make afterwards are the actual project.*
 
-This document is the look-dev analysis: what's in the scene, what colors it actually uses, how it moves and which ingredients make it look the way it does. Everything in it comes from three screenshots, so each claim is marked with how sure I can be about it.
+This document has two halves. The first is the look-dev analysis: what's in the scene, what colors it actually uses, how it moves and which ingredients make it look the way it does. Everything in that half comes from three screenshots, so each claim is marked with how sure I can be about it. The second half, [Building the study](#building-the-study), covers what happened when I built it: the pass-by-pass screenshots, the measured comparison with the reference, and what changed from the hypothesis.
 
 ## What the screenshots can and can't tell us
 
@@ -132,6 +132,91 @@ Nothing here is measured yet. This is what the scene's contents suggest, ordered
 
 ## Open questions
 
-1. **A short clip.** 10–30 seconds of the backdrop, recorded from an episode, kept in `reference/` and never committed. It would turn the motion section from a guess into measurements: animation rate, loop length, sway amplitudes, waterfall cycle length.
-2. **Credit.** The show's name and, if it's known, who made the backdrop, for the attribution line at the top of this file and in the README.
-3. **The asset route.** See [ASSETS.md](ASSETS.md). That decision sets how phase 2 builds layers.
+1. **A short clip.** 10–30 seconds of the backdrop, recorded from an episode, kept in `reference/` and never committed. It would turn the motion section from a guess into measurements: animation rate, loop length, sway amplitudes, waterfall cycle length. Until then, the build uses the starting values above.
+2. ~~Credit.~~ Resolved: the backdrop is Tamara's work, credited at the top of this file and on the page. The show stays unnamed.
+3. ~~The asset route.~~ Resolved for the study: see [Who made what](#who-made-what). The original scenes follow the hybrid plan in [ASSETS.md](ASSETS.md).
+
+## Building the study
+
+### Who made what
+
+For this study I asked Claude (Anthropic's AI coding assistant) to build everything, art included, so I could see the whole pipeline working before making my own assets. That means:
+
+- **All of the study's art is procedural.** Shapes are signed-distance functions with noise on their edges, and surfaces come from material functions (fibers, clumped foliage, paper grain, clay, beads) in [js/materials.js](../js/materials.js). There are no photographs, no hand-drawn images and no AI-generated images. Claude wrote the code that draws the art, and I directed it by comparing renders against the reference.
+- **The original scenes will use my own assets**, photographed and drawn as described in [ASSETS.md](ASSETS.md). The README will say layer by layer what's procedural, photographed or drawn.
+
+### What the renderer does
+
+- **Bake once.** At load, a list of shaders paints every layer into a texture. Some are bespoke to this scene (sky, clouds, horizon, hills, rock, mound, pool, waterfall). Others are reusable elements any scene can place: canopy, florets, trunk, branch, turf and fuzz, plus a sprite shader for swaying flowers and leaves. The waterfall bakes six frames.
+- **Composite on the beat.** Each layer is one textured quad. Its position is camera drift times its depth (parallax), plus its own animation: drift, sway around a pivot, or a cycle of baked frames. Boil wobbles each layer's texture lookup with smooth noise. Its seed changes on the beat and cycles through three values, like a drawing redrawn three times.
+- **Everything loops in 6 seconds**, at 12, 8 or 6 beats per second, because every period divides the loop and boil has three seeds. Measured as the mean absolute difference between frames (0–255): each beat changes the picture by about 2.9. The step from the last beat back to the first is 2.93, so the seam is no bigger than any other step. Two moments inside one beat differ by 0.00, so the pose really holds.
+- **Post stack**, in the order below. The scene and the bloom chain re-render only on a new beat. With grain set per beat (the default), nothing is drawn between beats.
+
+### The passes, one at a time
+
+Each image adds one pass to the one before. Same frame, 1920×1080, warm grade. ([docs/images/passes/](images/passes/))
+
+| Pass | What changed |
+| --- | --- |
+| ![Base](images/passes/00-base.jpg) **Base** | The baked layers with parallax and boil, no post. Already close to the reference's color structure: cool, purple hills, mint sky. |
+| ![Depth softness](images/passes/01-depth.jpg) **Depth softness** | A small blur on the sky, hills and back trees only. Subtle on its own, but it's what keeps the foreground reading as closer. |
+| ![Bloom and mist](images/passes/02-bloom.jpg) **Bloom and mist** | The fuzz. Glow on the highlights, plus a wide blur screened over everything, which lifts the darks and puts a halo on every edge. |
+| ![Halation](images/passes/03-halation.jpg) **Halation** | A warm fringe outside bright areas. Barely visible here, which matches the reference, where I found none. |
+| ![Grade](images/passes/04-grade.jpg) **Grade** | By far the biggest single change. The darkest 1% of the frame goes from 12 to 61 (0–255), the sky turns gold and rose, and saturation goes up. |
+| ![Chromatic aberration](images/passes/05-ca.jpg) **Chromatic aberration** | Red and blue pulled slightly apart toward the edges. At this strength you have to look for it. |
+| ![Vignette](images/passes/06-vignette.jpg) **Vignette** | Tinted peach rather than black, so the corners warm instead of darkening. |
+| ![Grain](images/passes/07-grain.jpg) **Grain** | Fine, and it changes once per beat. |
+
+This confirms the main prediction from the analysis: **the grade does most of the work**, and the haze (mist and depth softness) supports it. Halation and chromatic aberration are close to invisible at the strengths that look right.
+
+### Two grades: measured and warm
+
+The brief for this study asked for a fuzzy, bright, warm, dreamlike look, but the reference measures as cool (see [The look, measured](#the-look-measured)). So the study has both:
+
+- **Measured** (`?grade=measured`) is tuned to match the reference's numbers.
+- **Warm** (the default) is the art direction: gold highlights, rose and plum lifted blacks, higher saturation and more mist.
+
+To compare like with like, I placed each render in the reference's framing and ran the same sampler over the same regions, which leave out the host:
+
+| | Reference (frame 2) | Study, measured grade | Study, warm grade |
+| --- | --- | --- | --- |
+| Luma p1 / p50 / p99 | 25 / 69 / 207 | 20 / 69 / 207 | 56 / 119 / 226 |
+| Darkest 1% | `#13181D` | `#0F141A` | `#442F45` |
+| Median saturation | 0.38 | 0.43 | 0.26 |
+
+![The same frame with the measured grade](images/passes/08-measured-grade.jpg)
+
+The measured grade matches the reference's midtones and highlights and runs about five levels darker in the deepest shadows. The warm grade is far from the reference on purpose. It's about 30 levels lighter in the darks and noticeably less saturated, because the mist washes out color as it lifts. A side-by-side image with the reference (`reference/compare.jpg`) stays local, with the screenshots.
+
+### What still differs from the reference
+
+- **The center.** The host hides it in every sharp frame, so the dark mound there is my guess from the blurry wide shot. It's the least convincing part of the scene: a large area of one texture.
+- **Materials up close.** The canopy reads as clumped foliage at full screen, but its tufts are rounder and more regular than real lichen or foliage clumps. Photographed materials should improve this more than anything else.
+- **Motion** uses the starting values from the motion inventory. Without a clip, I can't say how close the rates and amplitudes are.
+
+### Performance
+
+Measured in Chrome 155 on this laptop (Intel Iris Xe, integrated graphics) with GPU timer queries, three runs each:
+
+| | 1920×1080 | 653×1412 (phone settings) |
+| --- | --- | --- |
+| Frame on a new beat: all layers, blur, bloom chain, final pass | 3.5–4.2 ms GPU (p50), 4.5 ms worst p95 | 1.6 ms GPU (p50) |
+| Frame between beats, grain per beat (default) | nothing drawn | nothing drawn |
+| Frame between beats, grain per frame | 0.8–1.1 ms GPU | not measured |
+| Load: shader compile + bake | 0.6–1.4 s + 5–8 ms (varies by run) | not measured |
+
+The phone column is the low-quality path (lower resolution, fewer bloom levels) measured on the laptop's GPU, not on a phone. I couldn't get a trustworthy frame-rate number from headless Chrome, because even an empty WebGL canvas drops frames there. `?stats=1` shows live frame times in a normal browser.
+
+Load time took the most work. The first version took 35 seconds to start, almost all of it compiling shaders: the Windows shader compiler inlines every function call, and one flower shader alone took 16.6 seconds. Three changes brought compiling down to between 0.6 and 1.4 seconds:
+
+- Each heavy function now has one call site: one draw per element, instead of one huge shader per layer.
+- Small loops use a uniform bound, so the compiler can't unroll them.
+- Every program compiles in parallel through `KHR_parallel_shader_compile`.
+
+### Quality checks so far
+
+- **Reduced motion.** With `prefers-reduced-motion`, the scene renders one still frame, nothing animates, and the button reads "Play animation". Pressing it from the keyboard starts the animation.
+- **No WebGL.** In Chrome with WebGL turned off, the page shows `images/still.jpg` with the caption.
+- **Lost GPU context.** The page falls back to the still image.
+- **Hidden or off screen.** In a scripted check the loop ran 60 frames in a second while visible, 0 while the tab reported hidden, 61 after it came back, and 0 with the canvas scrolled off screen.
+- **Caption contrast.** The caption text is cream (`#F3EEDD`) and tan (`#A79E8A`) on a 90% opaque near-black backing. Even with white showing through it, that's at least 12:1 and 5.3:1. The tuning panel's contrast gets checked in phase 4.

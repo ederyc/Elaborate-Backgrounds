@@ -22,6 +22,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def hexcolor(c):
+    if np.isnan(c).any():
+        return "n/a"  # the mask matched no pixels
     return "#%02X%02X%02X" % tuple(int(round(v)) for v in c)
 
 
@@ -37,6 +39,8 @@ def dominant(px, k=3, iters=12):
 
 def masked(px, mask, lit=None):
     sel = px[mask(px)]
+    if len(sel) == 0:
+        return np.full(3, np.nan)
     if lit is None:
         return sel.mean(0)
     s = sel.sum(1)
@@ -113,6 +117,8 @@ def sample(frames, frame, box, method):
     _, mask, lit = method
     if lit is not None and lit < 0:  # darkest share instead of brightest
         sel = px[mask(px)]
+        if len(sel) == 0:
+            return np.full(3, np.nan)
         tot = sel.sum(1)
         return sel[tot <= np.percentile(tot, -lit)].mean(0)
     return masked(px, mask, lit)
@@ -167,7 +173,7 @@ def draw_sheet(rows, out_path):
             d.text((x, y), name, fill="#1A1A1A", font=bold)
             y += 40
             for _, label, color, guess in items:
-                d.rectangle([x, y, x + sw, y + row_h - 10], fill=color)
+                d.rectangle([x, y, x + sw, y + row_h - 10], fill=color if color != "n/a" else "#FFFFFF", outline="#CCCCCC")
                 if guess:
                     # The brief's guess as a strip on the right edge of the swatch, for comparison.
                     d.rectangle([x + sw - 16, y, x + sw, y + row_h - 10], fill=guess)

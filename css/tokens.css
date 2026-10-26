@@ -1,0 +1,44 @@
+/* Copied from Resume/css/style.css :root — keep in sync with the portfolio. */
+:root {
+  --bg: #000000;
+  --bg-raised: #131313;
+  --ink: #F3EEDD;
+  --ink-soft: #A79E8A;
+  --ink-faint: #8C8370;
+  --line: #2A2A2A;
+  --line-strong: #3D3D3D;
+  --green: #4C7A63;
+  --gold: #D9A441;
+  --plum: #A56A82;
+
+  --serif: 'Fraunces', serif;
+  --sans: 'IBM Plex Sans', sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+
+  --measure: 62ch;
+  --pad-x: 6vw;
+
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 10px 24px -8px rgba(217, 164, 65, 0.4);
+
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 500ms;
+  --ease-standard: ease;
+  --ease-out: ease-out;
+
+  --space-1: 8px;
+  --space-2: 12px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
+  --space-8: 96px;
+
+  --header-h: 80px;
+}
