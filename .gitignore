@@ -1,0 +1,7 @@
+# Screenshots of the podcast set used for the study. Kept local, never published.
+reference/
+
+# Full-size material photos straight off the camera. Only processed textures get committed.
+source-photos/
+
+__pycache__/
