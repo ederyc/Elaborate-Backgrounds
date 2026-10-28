@@ -81,6 +81,12 @@
     { id: "bloom", cat: "Flowers", name: "Open bloom", credit: STUDY, layer: sprite("bloom", ["#D45852", "#F09484", "#FFE2D4"], { size: 0.045, tilt: 0.3 }) },
     { id: "leaf", cat: "Flowers", name: "Leaf", credit: STUDY, layer: sprite(null, ["#2E8F45", "#73D67A", "#B8F0A8"], { size: 0.017, anim: { type: "sway", amp: 0.06, phase: 1, speed: 2 } }) },
 
+    // ---- beach (from the Beach day sample) ----
+    { id: "palm", cat: "Beach", name: "Palm tree", credit: "Procedural, from Beach day (code by Claude)", layer: (at) => LB.BEACH.palm(at) },
+    { id: "umbrella", cat: "Beach", name: "Beach umbrella", credit: "Procedural, from Beach day (code by Claude)", layer: (at) => LB.BEACH.umbrella(at) },
+    { id: "seagull", cat: "Beach", name: "Seagull flying by", credit: "Procedural, from Beach day (code by Claude)", layer: (at) => LB.BEACH.gull(at) },
+    { id: "towel", cat: "Beach", name: "Striped towel", credit: SHAPE, item: () => LB.BEACH.towel([0, 0]) },
+
     // ---- sky ----
     { id: "sparkles", cat: "Sky", name: "Sparkles", credit: STUDY, layer: (at) => ({
       type: "sparkles", name: "Sparkles", depth: 0.02, far: true, count: 18, size: 0.0045, color: "#FFF8E6",
@@ -121,5 +127,5 @@
     return { layer };
   }
 
-  LB.LIBRARY = { ENTRIES, CATEGORIES: ["Shapes", "Plants", "Flowers", "Sky", "Your images"], imageEntries, make };
+  LB.LIBRARY = { ENTRIES, CATEGORIES: ["Shapes", "Plants", "Flowers", "Beach", "Sky", "Your images"], imageEntries, make };
 })();

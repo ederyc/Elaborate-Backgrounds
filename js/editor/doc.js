@@ -47,6 +47,13 @@
       grade: { exposure: 0, temperature: 0, tint: 0, contrast: 1, saturation: 1, floor: "#000000", whiteCap: 1, redCap: 1, shadowTint: "#808080", highlightTint: "#FFFFFF", split: 0 },
       post: { ...BASE_POST, bloom: { ...BASE_POST.bloom, glow: 0.3, mist: 0.08 }, halation: { ...BASE_POST.halation, amount: 0 }, ca: { amount: 0 }, vignette: { amount: 0.12, color: "#555555" }, grain: { amount: 0.02, perFrame: false } },
     },
+    sunny: {
+      name: "Sunny day",
+      note: "Bright and warm: golden highlights, lilac shadows, a soft haze and a little grain.",
+      grade: { exposure: 0.1, temperature: 0.3, tint: 0.03, contrast: 1.08, saturation: 1.25, floor: "#382630", whiteCap: 0.985, redCap: 1, shadowTint: "#6E5C96", highlightTint: "#FFE6B8", split: 0.26 },
+      post: { depth: { radius: 1.0 }, bloom: { glow: 0.55, threshold: 0.62, mist: 0.24, radius: 0.85 }, halation: { amount: 0.3, threshold: 0.6, color: "#FF8A50" },
+        ca: { amount: 0.0004 }, vignette: { amount: 0.26, color: "#E8B088" }, grain: { amount: 0.032, perFrame: false } },
+    },
     moonlit: {
       name: "Moonlit",
       note: "A night grade: blue shadows, pale highlights, a cold glow.",
@@ -65,12 +72,13 @@
   const titleCase = (id) => String(id).replace(/[-_]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
   const ITEM_NAMES = { canopy: "Foliage clump", florets: "Flower cluster", trunk: "Trunk", branch: "Branch", turf: "Grass bank", fuzz: "Felt ball" };
-  const SHAPE_NAMES = { rect: "rectangle", ellipse: "ellipse", polygon: "polygon", blob: "blob" };
+  const SHAPE_NAMES = { rect: "rectangle", ellipse: "ellipse", polygon: "polygon", blob: "blob", path: "cut-out" };
   function itemName(item, doc) {
     if (item.name) return item.name;
     if (item.shader) return `${titleCase(item.shader)} (study art)`;
     if (item.el === "shape") {
       const kind = item.shape === "polygon" && item.star > 0.05 ? "star" : item.shape === "polygon" && item.sides === 3 ? "triangle" : SHAPE_NAMES[item.shape] || "shape";
+      if (item.material === "stripes") return `Striped ${kind}`;
       return `${titleCase(item.material || "paper")} ${kind}`;
     }
     if (item.el === "image") return (doc && doc.images[item.image] && doc.images[item.image].name) || "Image";
@@ -102,6 +110,10 @@
       grade: "warm",
       images: {},
     }).doc;
+  }
+
+  function fromBeach() {
+    return normalize(LB.scenes.beach()).doc;
   }
 
   function fromStudy() {
@@ -159,6 +171,18 @@
       L.depth = num(L.depth, 0.5, 0, 1);
       L.boil = num(L.boil, 1, 0, 4);
       L.seed = num(L.seed, i, 0, 1e6);
+      if (L.anim && L.anim.type === "travel" && !(Array.isArray(L.anim.from) && Array.isArray(L.anim.to))) {
+        warnings.push(`"${L.name}" lost its travel motion: it needs a start and an end.`);
+        delete L.anim;
+      }
+      if (L.cycle) {
+        // A pose cycle has to fit the 6-second loop a whole number of times, or the loop would jump.
+        const f = Math.round(num(L.cycle.frames, 0, 0, 48)), r = num(L.cycle.rate, 0, 0, 24);
+        if (f < 1 || !(r > 0) || Math.abs(((LB.LOOP * r) / f) - Math.round((LB.LOOP * r) / f)) > 1e-6) {
+          warnings.push(`"${L.name}" lost its pose cycle: ${f} poses at ${r} per second doesn't fit the 6-second loop evenly.`);
+          delete L.cycle;
+        } else L.cycle = { frames: f, rate: r };
+      }
       if (L.type === "sprite") {
         if (![L.a, L.b, L.c].every((p) => Array.isArray(p) && p.length === 2) || !Array.isArray(L.colors)) { warnings.push(`Layer "${L.name}" was left out: its flower is missing its stem points or colors.`); return false; }
         if (L.flower && !["daisy", "tulip", "orchid", "bloom"].includes(L.flower)) L.flower = "bloom";
@@ -318,5 +342,5 @@
     return text ? normalize(JSON.parse(text)) : null;
   }
 
-  LB.DOC = { FORMAT, VERSION, A, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, normalize, serialize, saveLocal, loadLocal };
+  LB.DOC = { FORMAT, VERSION, A, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal };
 })();

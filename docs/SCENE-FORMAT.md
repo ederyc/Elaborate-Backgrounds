@@ -63,8 +63,16 @@ Layers are listed back to front. Three kinds:
 | `seed` | Pins the layer's noise, so reordering layers never changes how one looks |
 | `offset` | Moves the whole layer without rebaking it |
 | `opacity` | 0 to 1 |
-| `anim` | `drift` (`amp: [x, y]`), `sway` (`amp` in radians, `speed` in whole sways per loop, `phase`), or `cycle` (`frames`, `rate`; bespoke art only) |
+| `anim` | `drift` (`amp: [x, y]`), `sway` (`amp` in radians, `speed` in whole sways per loop, `phase`), `travel` (below), or `cycle` (`frames`, `rate`; bespoke art only) |
+| `cycle` | A pose cycle: `{ "frames": 12, "rate": 6 }` bakes 12 textures and steps through them 6 times a second. `frames / rate` has to divide the 6-second loop evenly, or the file is rejected with a message. Pieces with `poses` move between them. |
 | `pivot` | Where a paint layer sways from: `"base"` (default) or `"center"` |
+
+**Travel** moves a whole layer from `from` to `to` (offsets in scene units) `speed` whole times per loop, starting `phase` (0 to 1) of the way along, then jumps back to the start. Put both ends off screen so the jump is never seen. `bob` and `bobs` add an up-and-down bob a whole number of times per crossing. The Beach day gulls fly this way while their wings flap through a pose cycle:
+
+```json
+"anim": { "type": "travel", "from": [-0.12, 0], "to": [2.08, -0.04], "speed": 1, "phase": 0.15, "bob": 0.012, "bobs": 3 },
+"cycle": { "frames": 4, "rate": 8 }
+```
 | `hidden`, `locked` | Editor flags. Hidden layers don't render. |
 | `rect` | Optional. The area a bespoke shader paints. Paint layers work it out from their pieces otherwise. |
 | `res` | Optional bake resolution, relative to the screen (0.5 for soft layers) |
@@ -72,6 +80,14 @@ Layers are listed back to front. Three kinds:
 ## Pieces
 
 Every piece can carry `xf: { "x", "y", "s", "r" }`: move, scale and rotate (radians). Shapes and images are drawn around (0, 0), so for them `x` and `y` are simply where the piece sits. Every piece also gets an `id`, and can have a `name`.
+
+In a layer with a pose cycle, a piece can list `poses`, one per frame. Each pose adds to the piece's own transform (`x`, `y` and `r` are added, `s` multiplies), or hides the piece for that frame with `"hide": true`. An empty pose `{}` means "as placed". Moving the piece moves every pose with it.
+
+```json
+{ "el": "shape", "shape": "rect", "w": 0.04, "h": 0.03, "material": "clay", "colors": ["#2BB3B1"],
+  "xf": { "x": 1.2, "y": 0.86, "s": 1, "r": 1.15 },
+  "poses": [{}, { "r": 0.07 }, { "x": 0.01, "y": -0.05, "r": -1.45 }, { "hide": true }] }
+```
 
 **Shapes**
 
@@ -85,9 +101,10 @@ Every piece can carry `xf: { "x", "y", "s", "r" }`: move, scale and rotate (radi
 
 | Field | Meaning |
 | --- | --- |
-| `shape` | `rect` (with `corner`, 0 to 1), `ellipse`, `polygon` (with `sides`, and `star` 0 to 1), or `blob` (with `lobes`: [x, y, radius] circles blended together, and `merge`) |
+| `shape` | `rect` (with `corner`, 0 to 1), `ellipse`, `polygon` (with `sides`, and `star` 0 to 1), `blob` (with `lobes`: [x, y, radius] circles blended together, and `merge`), or `path`: a custom outline through up to 32 `points` around the piece's center, with `round` to soften its corners |
 | `w`, `h` | Size, for everything but blobs |
-| `material` | `paper`, `felt`, `clay`, `foliage` (second color = tips), `gradient` (top and bottom colors), or `photo` (with `image`, `tile` and `tint`) |
+| `material` | `paper`, `felt`, `clay`, `foliage` (second color = tips), `cardboard` (second color = flecks), `gradient` (top and bottom colors), `water` (far and near colors, with ripple strokes), `sand` (dry and wet colors), `stripes` (below), or `photo` (with `image`, `tile` and `tint`) |
+| `stripes` | For the stripes material: `{ "width": 0.03 }` for straight bands, or `{ "fan": true, "count": 10, "center": [x, y] }` for stripes fanning out from a point, like a beach umbrella |
 | `grain` | Pattern size multiplier for the material |
 | `rough` | Rough cut edge, 0 to 1 |
 | `fuzz` | Fibers breaking up the edge, 0 to 1 |

@@ -170,10 +170,13 @@
     dlgNew.addEventListener("click", (e) => {
       const t = e.target.closest("[data-template]");
       if (!t) return;
-      const doc = t.dataset.template === "study" ? LB.DOC.fromStudy() : LB.DOC.blankDoc();
+      const kind = t.dataset.template;
+      const doc = kind === "study" ? LB.DOC.fromStudy() : kind === "beach" ? LB.DOC.fromBeach() : LB.DOC.blankDoc();
       dlgNew.close();
       ED.load(doc, "New scene");
-      say(t.dataset.template === "study" ? "Opened the garden study. Every piece of it can be moved, changed or deleted." : "New scene. Draw with the shape tools or add pieces from the store.");
+      say({ study: "Opened the garden study. Every piece of it can be moved, changed or deleted.",
+        beach: "Opened the Beach day sample. Every piece is an editor shape; click one to see how it's made.",
+        blank: "New scene. Draw with the shape tools or add pieces from the store." }[kind]);
     });
 
     const dlg = $("#dlg-export");

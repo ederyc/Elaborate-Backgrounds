@@ -4,8 +4,11 @@ Looping stop-motion backgrounds in the browser, in two parts:
 
 - **The garden study** ([index.html](index.html)). A real-time WebGL2 recreation of the feel of a looping stop-motion backdrop: a handmade-looking fantasy garden with a waterfall, swaying flowers and a soft, warm, fuzzy filter. It's built as layered parallax quads on a stepped stop-motion clock, with a post stack on top.
 - **The editor** ([editor.html](editor.html)). The study's recipe, turned into a tool for making your own wallpapers: layers at depths, ready-made pieces from a store, shapes you cut and texture yourself, and the whole look as switches and sliders. It exports PNG stills, video loops and scene files.
+- **Beach day**, the editor's sample scene ([js/scenes/beach.js](js/scenes/beach.js)). A girl in a sun hat scoops sand into her bucket while waves roll in, palms sway, gulls fly past and a boardwalk crowd chatters in cardboard quote marks. Every piece is an ordinary editor shape, so all of it can be opened and changed.
 
-**The study is a study.** The original backdrop was made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it. The study's art is entirely procedural (shader code, no images), written by Claude at my direction. So are the editor's starter pieces, which say so in the store. My own scenes and materials, photographed and drawn by me, come next and are the actual portfolio piece.
+![Beach day, one frame of the 6-second loop](docs/images/beach-day.jpg)
+
+**The study is a study.** The original backdrop was made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it. The study's art is entirely procedural (shader code, no images), written by Claude at my direction. So are the editor's starter pieces, which say so in the store, and the Beach day sample, which Claude built from the editor's own pieces. My own scenes and materials, photographed and drawn by me, come next and are the actual portfolio piece.
 
 Status: phases 1 to 4 are done (analysis, rendering skeleton, the study, and the first version of the editor). The plan for the rest, including the store and 3D pieces, is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
 
@@ -32,7 +35,7 @@ The study's URL switches, mostly for comparing ingredients:
 
 ## Using the editor
 
-The first time, it opens the garden study with every piece editable. **New** starts from a blank backdrop.
+The first time, it opens the Beach day sample. **New** starts from a blank backdrop, the sample, or the garden study, each with every piece editable.
 
 - **Select and move.** Click a piece to select it, then drag it. Drag the square handle to scale and the round one to rotate (Shift snaps to 15°). Select a layer in the list and drag inside its dashed box to move the whole layer.
 - **Draw.** Pick a shape tool (R rectangle, E ellipse, T triangle, S star, C cloud) and drag on the canvas. New pieces go into the selected layer, or into a new layer if none can take them.
@@ -48,12 +51,16 @@ Measured in Chrome 156 on this laptop (Intel Iris Xe, integrated graphics), driv
 | Check | Result |
 | --- | --- |
 | The study, before and after the editor's engine changes | Same pixels at `?t=2.5`: largest difference 1 of 255, except where the new "Make your own" link sits in the caption |
-| Editor ready, study scene loaded | 1.1 to 1.3 s (three runs) |
+| Editor ready, study scene loaded | 1.1 to 1.3 s (three runs, before Beach day) |
+| Editor ready, Beach day loaded | 2.4 to 2.6 s (three runs): 1.6 s compiling the shape shader, about 90 ms baking 125 textures |
+| Beach day texture memory | About 78 MB at a 900 px tall bake (this test window). A 1080p screen bakes denser, so expect about 1.8 times that. |
+| Beach day, a new beat | 0.2 ms median, 0.3 ms p95 to draw (30 beats, 976×549 canvas) |
+| Beach day file round trip | Identical text, no warnings, 436 KB |
 | Rebake after moving one piece, in the study's busiest layers | Median 0.6 to 1.2 ms, worst 6.8 ms (8 moves per layer, three runs) |
 | Rebake after moving one of 25 shapes in one layer | 0.5 to 1.7 ms |
 | Scene file round trip (save, open, save) | Identical text |
 | Video loop, 1280×720 | MP4, 5.94 to 5.96 s long (six runs): the last beat is about 50 ms short, so a looping player shows a tiny hitch. Frame-exact export is planned (PLAN.md, phase 7). |
-| axe-core 4.10 scan, editor | No violations with nothing selected, a piece selected, the Look tab, and the Export dialog |
+| axe-core 4.10 scan, editor | No violations with nothing selected, a piece selected, the Look tab, and the Export dialog; again in Beach day with a gull layer and one of the girl's pieces selected |
 | axe-core 4.10 scan, study page | No violations |
 | Reduced motion | The editor doesn't autoplay; the play button reads "Play" |
 | Width 420 px | No sideways scrolling; canvas first, then the panels |
@@ -80,6 +87,7 @@ js/post.js                 Post-processing shaders
 js/renderer.js             Baking (only what changed), compositing, parallax, boil, the post stack
 js/scenes/garden.js        The study as data: layers, depth, motion, grades
 js/scenes/garden-art.js    The study's bespoke shaders (sky, clouds, hills, waterfall...)
+js/scenes/beach.js         The Beach day sample, built from editor shapes in a one-point perspective
 js/app.js                  The study page: boot, reduced motion, pause when hidden, fallbacks
 js/editor/doc.js           The scene document: checking files, look presets, undo, autosave
 js/editor/library.js       The store's pieces and their credits

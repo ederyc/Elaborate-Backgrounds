@@ -186,11 +186,16 @@
   function itemFields(item, L) {
     const isShape = item.el === "shape";
     const f = [{ key: "name", label: "Name", type: "text", get: (it) => D().itemName(it, ED.doc), set: (it, v) => { if (v.trim()) it.name = v.trim(); else delete it.name; } }, ...XF_FIELDS(L)];
+    if (item.poses) f.push({ type: "note", label: `This piece has ${item.poses.length} poses. Moving, scaling or rotating it changes every pose together.` });
     if (isShape) {
       f.push(
         { type: "heading", label: "Shape" },
-        { key: "shape", label: "Outline", type: "select", options: opts([["rect", "Rectangle"], ["ellipse", "Ellipse"], ["polygon", "Polygon or star"], ["blob", "Blob (round lobes)"]]),
+        { key: "shape", label: "Outline", type: "select", options: opts([["rect", "Rectangle"], ["ellipse", "Ellipse"], ["polygon", "Polygon or star"], ["blob", "Blob (round lobes)"], ["path", "Custom outline (points)"]]),
           set: (it, v) => {
+            if (v === "path" && !it.points) {
+              const b = LB.ELEMENTS.shape.outline(it);
+              it.points = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+            }
             if (v === "blob" && !it.lobes) {
               const w = it.w || 0.3, hh = it.h || 0.2;
               it.lobes = [[-w * 0.25, 0, hh * 0.45], [0, -hh * 0.12, hh * 0.55], [w * 0.25, 0, hh * 0.45]];
@@ -198,20 +203,30 @@
             if (v !== "blob" && !it.w) { const b = LB.ELEMENTS.shape.outline(it); it.w = b[2] - b[0]; it.h = b[3] - b[1]; }
             it.shape = v;
           } },
-        { key: "w", label: "Width", type: "range", min: 0.01, max: 2.4, step: 0.005, when: (it) => it.shape !== "blob" },
-        { key: "h", label: "Height", type: "range", min: 0.01, max: 1.6, step: 0.005, when: (it) => it.shape !== "blob" },
+        { key: "w", label: "Width", type: "range", min: 0.01, max: 2.4, step: 0.005, when: (it) => it.shape !== "blob" && it.shape !== "path" },
+        { key: "h", label: "Height", type: "range", min: 0.01, max: 1.6, step: 0.005, when: (it) => it.shape !== "blob" && it.shape !== "path" },
+        { type: "note", label: (it) => `A cut-out through ${it.points.length} points. Scale and rotate it under Placement. Editing the points themselves comes in a later version.`, when: (it) => it.shape === "path" },
+        { key: "round", label: "Round the corners", type: "range", min: 0, max: 0.03, step: 0.0005, fallback: 0, when: (it) => it.shape === "path" },
         { key: "corner", label: "Corner roundness", type: "range", ...pct, when: (it) => it.shape === "rect", fallback: 0.15 },
         { key: "sides", label: "Points", type: "range", min: 3, max: 12, step: 1, when: (it) => it.shape === "polygon", fallback: 5 },
         { key: "star", label: "Star depth", type: "range", ...pct, when: (it) => it.shape === "polygon", fallback: 0 },
         { key: "merge", label: "Lobe blending", type: "range", min: 0, max: 0.08, step: 0.002, when: (it) => it.shape === "blob", fallback: 0.03 },
         { type: "heading", label: "Material" },
-        { key: "material", label: "Material", type: "select", options: (it) => [["paper", "Painted paper"], ["felt", "Felt"], ["clay", "Clay"], ["foliage", "Clumped foliage"], ["gradient", "Two-color wash"], ...(imageOptions().length ? [["photo", "Photo (your picture)"]] : [])],
+        { key: "material", label: "Material", type: "select", options: (it) => [["paper", "Painted paper"], ["felt", "Felt"], ["clay", "Clay"], ["foliage", "Clumped foliage"], ["cardboard", "Cardboard"], ["stripes", "Painted stripes"], ["gradient", "Two-color wash"], ["water", "Painted water"], ["sand", "Sand"], ...(imageOptions().length ? [["photo", "Photo (your picture)"]] : [])],
           set: (it, v) => { it.material = v; if (v === "photo" && !ED.doc.images[it.image]) it.image = imageOptions()[0][0]; } },
         { key: "image", label: "Picture", type: "select", options: imageOptions, when: (it) => it.material === "photo" },
         { key: "tile", label: "Picture tile size", type: "range", min: 0.05, max: 1.5, step: 0.01, when: (it) => it.material === "photo", fallback: 0.4 },
         { key: "tint", label: "Tint toward color", type: "range", ...pct, when: (it) => it.material === "photo", fallback: 0 },
-        { key: "colors.0", label: (it) => (it.material === "gradient" ? "Top color" : it.material === "photo" ? "Tint color" : "Color"), type: "color" },
-        { key: "colors.1", label: (it) => (it.material === "gradient" ? "Bottom color" : "Tip color"), type: "color", when: (it) => it.material === "gradient" || it.material === "foliage" },
+        { key: "colors.0", label: (it) => ({ gradient: "Top color", photo: "Tint color", water: "Far water", sand: "Dry sand, at the top", stripes: "First stripe" }[it.material] || "Color"), type: "color" },
+        { key: "colors.1", label: (it) => ({ gradient: "Bottom color", water: "Near water", sand: "Wet sand, at the bottom", stripes: "Second stripe", cardboard: "Flecks" }[it.material] || "Tip color"), type: "color",
+          when: (it) => ["gradient", "foliage", "water", "sand", "stripes", "cardboard"].includes(it.material) },
+        { key: "stripes.fan", label: "Stripes", type: "select", options: opts([["", "Straight bands"], ["fan", "Fan from a point (umbrellas)"]]), when: (it) => it.material === "stripes",
+          get: (it) => (it.stripes && it.stripes.fan ? "fan" : ""), set: (it, v) => {
+            const b = LB.ELEMENTS.shape.outline(it);
+            it.stripes = v ? { fan: true, count: (it.stripes && it.stripes.count) || 10, center: [(b[0] + b[2]) / 2, b[1]] } : { width: (it.stripes && it.stripes.width) || 0.03 };
+          } },
+        { key: "stripes.width", label: "Stripe width", type: "range", min: 0.003, max: 0.12, step: 0.001, fallback: 0.03, when: (it) => it.material === "stripes" && !(it.stripes && it.stripes.fan) },
+        { key: "stripes.count", label: "Number of stripes", type: "range", min: 2, max: 24, step: 2, fallback: 10, when: (it) => it.material === "stripes" && !!(it.stripes && it.stripes.fan) },
         { key: "grain", label: "Pattern size", type: "range", min: 0.3, max: 3, step: 0.05, fallback: 1, when: (it) => it.material !== "photo",
           hint: "Bigger numbers make the felt, clay and foliage texture finer." },
         { type: "heading", label: "Handmade feel" },
@@ -263,7 +278,7 @@
     return f;
   }
 
-  const MOTIONS = [["none", "Still"], ["drift", "Drift side to side"], ["sway", "Sway"]];
+  const MOTIONS = [["none", "Still"], ["drift", "Drift side to side"], ["sway", "Sway"], ["travel", "Travel across (and loop)"]];
   function layerFields(L) {
     const sprite = L.type === "sprite", sparkles = L.type === "sparkles";
     const f = [
@@ -276,6 +291,10 @@
       { key: "opacity", label: "Opacity", type: "range", ...pct, fallback: 1 },
       { type: "heading", label: "Motion" },
     ];
+    if (L.cycle) {
+      const secs = Math.round((L.cycle.frames / L.cycle.rate) * 100) / 100;
+      f.push({ type: "note", label: `Pose cycle: ${L.cycle.frames} poses at ${L.cycle.rate} a second, ${secs} seconds round, so it plays ${Math.round((LB.LOOP * L.cycle.rate) / L.cycle.frames)} times a loop. Pieces with poses step between them.` });
+    }
     if (L.anim && L.anim.type === "cycle") {
       f.push({ type: "note", label: `Cycles ${L.anim.frames} baked frames at ${L.anim.rate} per second.` });
     } else {
@@ -284,6 +303,7 @@
           set: (l, v) => {
             if (v === "none") delete l.anim;
             else if (v === "drift") l.anim = { type: "drift", amp: [0.012, 0.002] };
+            else if (v === "travel") l.anim = { type: "travel", from: [-2.2, 0], to: [0.4, 0], speed: 1, phase: 0, bob: 0.01, bobs: 3 };
             else l.anim = { type: "sway", amp: 0.04, phase: 0, speed: 1 };
           } },
         { key: "anim.amp.0", label: "Drift distance", type: "range", min: 0, max: 0.06, step: 0.001, when: (l) => l.anim && l.anim.type === "drift" },
@@ -292,6 +312,12 @@
         { key: "anim.speed", label: "Sways per loop", type: "range", min: 1, max: 4, step: 1, fallback: 1, when: (l) => l.anim && l.anim.type === "sway",
           hint: "Whole numbers, so the motion lands back where it started when the 6-second loop repeats." },
         { key: "anim.phase", label: "Timing offset", type: "range", min: 0, max: 6.28, step: 0.01, when: (l) => l.anim && l.anim.type === "sway", format: (v) => `${Math.round((v / 6.2832) * 100)}%` },
+        { key: "anim.speed", label: "Crossings per loop", type: "range", min: 1, max: 4, step: 1, fallback: 1, when: (l) => l.anim && l.anim.type === "travel",
+          hint: "It enters at the start point and leaves at the end, then starts over. Keep both ends off screen so the jump back is never seen." },
+        { key: "anim.phase", label: "Head start", type: "range", min: 0, max: 0.99, step: 0.01, fallback: 0, when: (l) => l.anim && l.anim.type === "travel", format: (v) => `${Math.round(v * 100)}%` },
+        { key: "anim.to.0", label: "How far it travels", type: "range", min: -2.6, max: 2.6, step: 0.01, when: (l) => l.anim && l.anim.type === "travel",
+          get: (l) => l.anim.to[0] - l.anim.from[0], set: (l, v) => (l.anim.to[0] = l.anim.from[0] + v) },
+        { key: "anim.bob", label: "Bob up and down", type: "range", min: 0, max: 0.04, step: 0.001, fallback: 0, when: (l) => l.anim && l.anim.type === "travel" },
         { key: "pivot", label: "Sway from", type: "select", options: opts([["base", "The bottom edge"], ["center", "The middle"]]), fallback: "base", when: (l) => !sprite && l.anim && l.anim.type === "sway" },
       );
     }

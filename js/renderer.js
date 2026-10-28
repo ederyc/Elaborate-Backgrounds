@@ -175,14 +175,17 @@ void main() {
       let r = L.rect ? L.rect.slice() : null;
       for (const item of L.paint || []) {
         if (item.shader && !L.rect) r = I.union(r, LIMIT);
-        else if (!L.rect || !I.isIdentity(item)) r = I.union(r, I.worldBox(item, L));
+        else if (!L.rect || !I.isIdentity(item) || item.poses) r = I.union(r, I.allPosesBox(item, L));
       }
       r = r || [0, 0, 0.01, 0.01];
       return [Math.max(r[0], LIMIT[0]), Math.max(r[1], LIMIT[1]), Math.min(r[2], LIMIT[2]), Math.min(r[3], LIMIT[3])];
     }
 
+    // How many textures a layer bakes: one per pose in a pose cycle, or per frame of a cycle animation.
+    const bakeFrames = (L) => (L.cycle ? L.cycle.frames : L.anim && L.anim.type === "cycle" ? L.anim.frames : 1);
+
     function signature(L) {
-      const frames = L.anim && L.anim.type === "cycle" ? L.anim.frames : 1;
+      const frames = bakeFrames(L);
       return JSON.stringify(L, (k, v) => (COMPOSITE_KEYS.has(k) ? undefined : v)) + "|" + frames + "|" + L.index + "|" + scene.art;
     }
 
@@ -249,7 +252,9 @@ void main() {
       const TILE = 512;
       // Bespoke shaders cover the rect the scene file gave, even when moved items have stretched the texture.
       const host = L.type === "sprite" ? L : { rect: L.baseRect || L.rect };
-      paintOf(L).forEach((item, pi) => {
+      paintOf(L).forEach((item0, pi) => {
+        const item = item0.sprite ? item0 : I.atPose(item0, frame);
+        if (item.hide) return;
         const pr = progCache.get(progKey(item));
         gl.useProgram(pr.prog);
         const t = item.sprite ? I.IDENTITY : I.xfOf(item);
@@ -293,7 +298,7 @@ void main() {
       const t1 = performance.now();
       const jobs = [];
       for (const L of list) {
-        const frames = L.anim && L.anim.type === "cycle" ? L.anim.frames : 1;
+        const frames = bakeFrames(L);
         const res = L.res || 1;
         let w = (L.rect[2] - L.rect[0]) * density * res;
         let h = (L.rect[3] - L.rect[1]) * density * res;
@@ -446,8 +451,14 @@ void main() {
           angle = a.amp * Math.sin(TAU * k * t / loop + a.phase) + a.amp * 0.25 * Math.sin(3 * TAU * k * t / loop + a.phase * 1.7);
         } else if (a.type === "cycle") {
           frame = Math.floor(t * a.rate + 1e-6) % a.frames;
+        } else if (a.type === "travel") {
+          // Crosses from "from" to "to" a whole number of times per loop, bobbing a whole number of times per crossing.
+          const f = (((t / loop) * (a.speed || 1) + (a.phase || 0)) % 1 + 1) % 1;
+          ox += a.from[0] + (a.to[0] - a.from[0]) * f;
+          oy += a.from[1] + (a.to[1] - a.from[1]) * f + (a.bob || 0) * Math.sin(TAU * f * (a.bobs || 4));
         }
       }
+      if (L.cycle && post.motion) frame = Math.floor(t * L.cycle.rate + 1e-6) % L.cycle.frames;
       // Sprites also get a tiny per-beat nudge, like a puppet that never sits in exactly the same spot.
       if (jitter && L.type === "sprite" && post.boil > 0) {
         const k = post.boil * view[3] / 1080;
@@ -708,8 +719,15 @@ void main() {
       return { ...p, rect: L.rect, pivot: L.type === "sparkles" ? null : pivotOf(L) };
     }
 
+    // The pose a layer shows at this moment (0 for layers without a pose cycle).
+    function frameOf(id, clock) {
+      const L = layers.find((l) => l.id === id);
+      if (!L || !L.cycle || !post || !post.motion) return 0;
+      return Math.floor(clock.beatTime * L.cycle.rate + 1e-6) % L.cycle.frames;
+    }
+
     return {
-      gl, resize, setPost, setGrade, invalidate, draw, sync, readPixels, thumbnail, poseOf,
+      gl, resize, setPost, setGrade, invalidate, draw, sync, readPixels, thumbnail, poseOf, frameOf,
       bake: (onProgress) => sync(scene, onProgress),
       get size() { return [W, H]; },
       get view() { return view; },

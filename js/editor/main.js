@@ -198,13 +198,15 @@
       console.warn("No saved scene", err);
     }
     const restored = !!first;
-    if (!first) first = LB.DOC.fromStudy();
+    if (!first) first = LB.DOC.fromBeach();
 
     const small = window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
     try {
       renderer = LB.createRenderer(canvas, first, {
         quality: small ? "low" : "high",
         bakeHeight: Math.min(Math.max(screen.height, window.innerHeight), 1440) * Math.min(window.devicePixelRatio || 1, 2),
+        // ?timebake=1 logs shader compile and bake times to the console, like the study page.
+        timeBake: new URLSearchParams(location.search).has("timebake"),
       });
     } catch (err) {
       fail("This editor needs WebGL2, which this browser or device doesn't have turned on. The study page has a still image instead.");
@@ -235,7 +237,7 @@
     ED.load(first, "Open");
     LB.CANVAS.fit();
     if (warnings.length) ED.emit("status", { msg: warnings.join(" "), tone: "warn" });
-    else ED.emit("status", { msg: restored ? "Opened your last scene from this browser." : "This is the garden study, opened in the editor. Click any piece to change it, or start fresh with New." });
+    else ED.emit("status", { msg: restored ? "Opened your last scene from this browser." : "This is Beach day, the sample scene. Click any piece to see how it's made, or start fresh with New." });
     $("#save-state").textContent = restored ? "Saved in this browser" : "Not saved yet";
 
     await renderer.sync(sceneFor(ED.doc));

@@ -75,9 +75,15 @@
   }
 
   // Scene-space outline of a selected thing: 4 corners (an item) or a box (a layer).
+  // A piece as it stands in the layer's current pose.
+  const posedItem = (L, item) => I().atPose(item, ED.renderer.frameOf(L.id, ED.clock));
+
   function outlineOf(L, item) {
     const off = poseOffset(L);
-    if (item) return I().corners(item, L, I().outlineBox(item, L)).map((p) => [p[0] + off[0], p[1] + off[1]]);
+    if (item) {
+      const it = posedItem(L, item);
+      return I().corners(it, L, I().outlineBox(it, L)).map((p) => [p[0] + off[0], p[1] + off[1]]);
+    }
     let b;
     if (L.type === "sparkles") b = L.area;
     else {
@@ -87,7 +93,7 @@
       if (!L.type && L.paint.length) {
         // A paint layer's box is the union of its pieces, not its whole texture.
         b = null;
-        for (const it of L.paint) b = I().union(b, I().worldBox(it, L.rect ? { rect: L.rect } : L));
+        for (const it of L.paint) b = I().union(b, I().worldBox(posedItem(L, it), L.rect ? { rect: L.rect } : L));
       }
     }
     return [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]].map((p) => [p[0] + off[0], p[1] + off[1]]);
@@ -114,7 +120,9 @@
         const item = L.paint[k];
         // Full-frame study shaders (the sky) would catch every click; only pick them when nothing else is there.
         if (item.shader) continue;
-        if (I().hit(item, L.rect ? { rect: L.rect } : L, q)) return { layer: L.id, item: item.id };
+        const it = posedItem(L, item);
+        if (it.hide) continue;
+        if (I().hit(it, L.rect ? { rect: L.rect } : L, q)) return { layer: L.id, item: item.id };
       }
     }
     for (let i = layers.length - 1; i >= 0; i--) {
@@ -208,7 +216,7 @@
       const pts = outlineOf(L, item);
       const hd = handlesFor(pts);
       const t = I().xfOf(item);
-      const pos = I().position(item, L.rect ? { rect: L.rect } : L);
+      const pos = I().position(posedItem(L, item), L.rect ? { rect: L.rect } : L);
       const off = poseOffset(L);
       const centerScene = [pos[0] + off[0], pos[1] + off[1]];
       if (near(lp, hd.rotate)) {

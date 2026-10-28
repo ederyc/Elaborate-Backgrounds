@@ -22,6 +22,24 @@ This changes the brief's plan. The old phase 4 was a scene file format plus a tu
 
 What it doesn't do yet: multi-select, grouping, editing the points of an outline, touch-sized handles, and frame-exact video. Scenes are 16:9; phone exports show a slice of the frame, chosen with the "phone crop" control.
 
+## The first sample: Beach day
+
+Built after phase 4, at your request, as a showcase of what the editor can already do. It's in [js/scenes/beach.js](../js/scenes/beach.js) and opens by default. Everything in it is an editor shape, so a person can click any piece and see how it's made.
+
+It needed four additions to the editor, all general, all in the scene format and the Properties panel:
+
+- **Custom outlines.** A shape can be a cut-out through up to 32 points: the shoreline, the palm fronds, the crowd's shoulders. The points can't be dragged yet; that's the outline editor in phase 5.
+- **New materials.** Painted water, sand, stripes (straight bands or a fan, for umbrellas and towels), and cardboard.
+- **Pose cycles.** A layer can step through a set of poses on the beat, and each piece moves, turns or hides from pose to pose. This is how the girl digs (12 poses), the waves roll in, the fronds sway and the gulls flap. It's replacement animation, the way stop motion is shot. Making poses by hand in the editor (a pose timeline) belongs in phase 5.
+- **Travel.** A layer can cross the frame and loop, for the gulls.
+
+Open question: **a name for the things people make.** Options, with my recommendation first:
+
+1. **Sets.** The stop-motion word for the built world a scene is shot in, and it fits "make a set, dress it, shoot it." It can be confused with "a set of things."
+2. **Backdrops.** Clear and matches the editor's name, but sounds static.
+3. **Dioramas.** Captures the layered, handmade look, but is longer and less familiar as a word for a wallpaper.
+4. **Loops.** Says what the output is (a seamless loop), but not what it looks like.
+
 ## The phases from here
 
 Each phase ends with a stop for your review, as before.

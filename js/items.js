@@ -8,6 +8,11 @@
   center of the item's own bounding box for everything else. The bake
   shaders undo the transform in scenePos(), so no element needs to know it.
 
+  Poses: a layer with a pose cycle (layer.cycle = { frames, rate }) bakes one
+  texture per pose. Its items can list "poses", one per frame: changes added
+  on top of the item's own transform ({ x, y, r } added, { s } multiplied),
+  or { hide: true }. Moving an item moves all its poses with it.
+
   Item kinds:
     { el: "canopy" | "shape" | ... }   a reusable element (js/elements.js, js/shapes.js)
     { shader: "sky" }                  a bespoke shader from a scene's art pack; it covers the layer's rect
@@ -78,6 +83,15 @@
     const q = toLocal(item, layer, p);
     const b = outlineBox(item, layer);
     if (q[0] < b[0] || q[0] > b[2] || q[1] < b[1] || q[1] > b[3]) return false;
+    if (item.el === "shape" && item.shape === "path" && item.points) {
+      // Even-odd test against the outline.
+      let inside = false;
+      const ps = item.points;
+      for (let i = 0, j = ps.length - 1; i < ps.length; j = i++) {
+        if ((ps[i][1] > q[1]) !== (ps[j][1] > q[1]) && q[0] < ((ps[j][0] - ps[i][0]) * (q[1] - ps[i][1])) / (ps[j][1] - ps[i][1]) + ps[i][0]) inside = !inside;
+      }
+      return inside;
+    }
     const lobes = item.lobes;
     if (lobes && (item.el !== "shape" || item.shape === "blob")) return lobes.some((l) => Math.hypot(q[0] - l[0], q[1] - l[1]) <= l[2] * 1.05);
     if (item.el === "shape" && item.shape === "ellipse") {
@@ -93,7 +107,23 @@
     return E && E.images ? E.images(item) : [];
   }
 
+  // The item as it stands in pose f (unchanged when it has no poses).
+  function atPose(item, f) {
+    if (!item.poses || !item.poses.length) return item;
+    const p = item.poses[((f % item.poses.length) + item.poses.length) % item.poses.length] || {};
+    const t = xfOf(item);
+    return { ...item, xf: { x: t.x + (p.x || 0), y: t.y + (p.y || 0), s: t.s * (p.s ?? 1), r: t.r + (p.r || 0) }, hide: !!p.hide };
+  }
+
+  // Bounds over every pose, so a layer's texture fits all of them.
+  function allPosesBox(item, layer) {
+    if (!item.poses || !item.poses.length) return worldBox(item, layer);
+    let b = null;
+    for (let f = 0; f < item.poses.length; f++) b = union(b, worldBox(atPose(item, f), layer));
+    return b;
+  }
+
   const union = (a, b) => (a ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])] : b.slice());
 
-  LB.ITEMS = { IDENTITY, xfOf, isIdentity, rawBox, origin, toScene, toLocal, corners, worldBox, outlineBox, position, hit, images, union };
+  LB.ITEMS = { atPose, allPosesBox, IDENTITY, xfOf, isIdentity, rawBox, origin, toScene, toLocal, corners, worldBox, outlineBox, position, hit, images, union };
 })();

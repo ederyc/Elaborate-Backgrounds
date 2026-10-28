@@ -20,10 +20,10 @@
   const rgb = (h) => LB.gl.rgb(h);
 
   const SHAPE = `
-uniform int uShape;       // 0 rectangle, 1 ellipse, 2 polygon or star, 3 blob
+uniform int uShape;       // 0 rectangle, 1 ellipse, 2 polygon or star, 3 blob, 4 custom outline (points)
 uniform vec2 uHalf;       // half width, half height
 uniform vec4 uForm;       // corner roundness 0..1, sides, star depth 0..1, 0
-uniform int uMat;         // 0 paper, 1 felt, 2 clay, 3 foliage, 4 gradient, 5 photo
+uniform int uMat;         // 0 paper, 1 felt, 2 clay, 3 foliage, 4 gradient, 5 photo, 6 water, 7 sand, 8 stripes, 9 cardboard
 uniform vec3 uCol1, uCol2;
 uniform float uGrain;     // pattern size multiplier
 uniform vec4 uLook;       // edge roughness (scene units), puff 0..1, shadow 0..1, fuzz 0..1
@@ -36,6 +36,25 @@ uniform vec4 uPhoto;      // tile width, tile height, tint amount, 0
 uniform vec3 uLobes[8];
 uniform int uLobeCount;
 uniform float uMerge;
+uniform vec2 uPts[32];    // custom outline, in the shape's own coordinates
+uniform int uPtCount;
+uniform vec4 uStripe;     // mode (0 bands across, 1 fan from a point), stripe width or count, fan center x, y
+
+// Signed distance to a closed outline through uPts (negative inside).
+float sdPath(vec2 p) {
+  float d = dot(p - uPts[0], p - uPts[0]);
+  float s = 1.0;
+  int j = uPtCount - 1;
+  for (int i = 0; i < uPtCount; i++) {
+    vec2 e = uPts[j] - uPts[i], w = p - uPts[i];
+    vec2 b = w - e * clamp(dot(w, e) / max(dot(e, e), 1e-9), 0.0, 1.0);
+    d = min(d, dot(b, b));
+    bool c1 = p.y >= uPts[i].y, c2 = p.y < uPts[j].y, c3 = e.x * w.y > e.y * w.x;
+    if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) s = -s;
+    j = i;
+  }
+  return s * sqrt(d);
+}
 
 float sdShape(vec2 p) {
   if (uShape == 0) {
@@ -61,6 +80,7 @@ float sdShape(vec2 p) {
     float side = sign(e.x * w.y - e.y * w.x);
     return -side * length(h) * min(uHalf.x, uHalf.y);
   }
+  if (uShape == 4) return sdPath(p) - uForm.x;
   float d = 1e9;
   for (int i = 0; i < uLobeCount; i++) d = smin(d, length(p - uLobes[i].xy) - uLobes[i].z, uMerge);
   return d;
@@ -77,28 +97,63 @@ void main() {
   }
 
   vec2 pp = p * uGrain + uSeed * 1.7;
+  float tY = smoothstep(-uHalf.y, uHalf.y, p.y);
+
+  // Shared noise, each computed exactly once. The Windows shader compiler inlines every call site,
+  // so one call per noise (with a scale picked by material) keeps this shader quick to compile.
+  float pap = paper(p);
+  float fz = fuzz(p);
+  float br = brush(pp, uMat == 4 ? 6.0 : uMat == 6 ? 9.0 : uMat == 8 ? 25.0 : 30.0);
+  float m1 = fbm3(pp * (uMat == 1 ? 24.0 : uMat == 2 ? 20.0 : uMat == 6 ? 3.0 : uMat == 7 ? 8.0 : 14.0));
+  // Clay's dents are lit from their slope, taken from the screen-space change in m1.
+  vec2 mSlope = vec2(dFdx(m1), dFdy(m1)) / max(20.0 * uGrain * uPx, 1e-6) * 0.39;
+  vec2 nq = uMat == 6 ? vec2(pp.x * 7.0 + m1 * 2.0, pp.y * mix(170.0, 55.0, tY)) : uMat == 7 ? p / uPx * 0.8 : pp * (uMat == 2 ? 140.0 : 90.0);
+  float n1 = vnoise(nq);
+
   float th = 0.5;
   vec3 c;
   if (uMat == 0) {
-    c = uCol1 * (0.9 + 0.16 * paper(p)) * (0.95 + 0.08 * brush(pp, 30.0));
+    c = uCol1 * (0.9 + 0.16 * pap) * (0.95 + 0.08 * br);
   } else if (uMat == 1) {
-    c = uCol1 * (0.78 + 0.38 * fuzz(p)) * (0.9 + 0.18 * fbm3(pp * 24.0));
+    c = uCol1 * (0.78 + 0.38 * fz) * (0.9 + 0.18 * m1);
   } else if (uMat == 2) {
     // Thumb-pressed clay: soft dents lit from the key light, and a slight mottle in the paint.
-    vec2 q = pp * 20.0;
-    float dent = fbm3(q), dx = fbm3(q + vec2(0.3, 0.0)), dy = fbm3(q + vec2(0.0, 0.3));
-    vec3 cn = normalize(vec3((dx - dent) * 1.3, (dy - dent) * 1.3, 1.0));
-    c = lit(uCol1 * (0.94 + 0.1 * dent), cn, 1.0) / lit(vec3(1.0), vec3(0.0, 0.0, 1.0), 1.0);
-    c *= 0.98 + 0.04 * vnoise(pp * 140.0);
+    vec3 cn = normalize(vec3(mSlope, 1.0));
+    c = lit(uCol1 * (0.94 + 0.1 * m1), cn, 1.0) / lit(vec3(1.0), vec3(0.0, 0.0, 1.0), 1.0);
+    c *= 0.98 + 0.04 * n1;
   } else if (uMat == 3) {
     c = foliage(p, uCol1 * 0.35, uCol1, min(uCol1 * 1.35 + 0.04, vec3(1.0)), uCol2, 90.0 * uGrain, th);
     d -= (th - 0.45) * 0.8 / (90.0 * uGrain);
   } else if (uMat == 4) {
-    c = mix(uCol1, uCol2, smoothstep(-uHalf.y, uHalf.y, p.y)) * (0.95 + 0.08 * paper(p)) * (0.97 + 0.05 * brush(pp, 6.0));
-  } else {
+    c = mix(uCol1, uCol2, tY) * (0.95 + 0.08 * pap) * (0.97 + 0.05 * br);
+  } else if (uMat == 5) {
     vec3 ph = texture(uImage, p / uPhoto.xy + 0.5).rgb;
     float lum = dot(ph, vec3(0.299, 0.587, 0.114));
     c = mix(ph, clamp(uCol1 * lum * 2.0, 0.0, 1.0), uPhoto.z);
+  } else if (uMat == 6) {
+    // Painted water: far color to near color, with ripple strokes that crowd together toward the top (the distance).
+    c = mix(uCol1, uCol2, tY);
+    c = mix(c, min(c * 1.25 + 0.1, vec3(1.0)), smoothstep(0.62, 0.92, n1) * 0.7);
+    c *= 0.9 + 0.1 * smoothstep(0.15, 0.45, n1);
+    c *= 0.95 + 0.08 * br;
+  } else if (uMat == 7) {
+    // Sand: dry color to wet color down the piece, grains about a pixel each, soft ripples, a few darker grains.
+    c = mix(uCol1, uCol2, tY);
+    c *= 0.9 + 0.17 * (0.6 * n1 + 0.4 * pap);
+    c *= 0.96 + 0.06 * sin(pp.y * 160.0 + m1 * 6.0);
+    c *= 0.94 + 0.1 * m1;
+    c = mix(c, c * 0.62, step(0.985, hash12(floor(p / uPx * 0.56))));
+  } else if (uMat == 8) {
+    // Stripes, painted by hand: bands across the piece, or a fan from a point (beach umbrellas).
+    float u = uStripe.x < 0.5 ? p.y / max(uStripe.y, 1e-4) : atan(p.x - uStripe.z, p.y - uStripe.w) / (2.0 * PI) * uStripe.y;
+    u += (m1 - 0.5) * 0.12;
+    float band = smoothstep(0.47, 0.53, abs(fract(u) - 0.5) * 2.0);
+    c = mix(uCol1, uCol2, band) * (0.92 + 0.12 * pap) * (0.96 + 0.06 * br);
+  } else {
+    // Cardboard: kraft fibers, faint corrugation showing through, a few darker flecks.
+    c = uCol1 * (0.86 + 0.16 * fz) * (0.95 + 0.08 * m1);
+    c *= 0.97 + 0.04 * sin(pp.x * 420.0);
+    c = mix(c, uCol2, smoothstep(0.86, 0.95, n1) * 0.5);
   }
   if (uSpeck.w > 0.5) c = specks(p, c, uSpeck.x, uSpeck.y, uSpeckA, uSpeckB, uSpeck.z);
 
@@ -111,7 +166,7 @@ void main() {
   vec3 n = vec3(g * uLook.y * pow(1.0 - h, 1.5) * 2.2, 1.0);
   c *= lit(vec3(1.0), n, 1.0) / lit(vec3(1.0), vec3(0.0, 0.0, 1.0), 1.0) * mix(1.0, 0.82 + 0.18 * h, uLook.y);
 
-  float a = clamp(0.5 - (d + (fuzz(p) - 0.5) * uLook.w * 5.0 * uPx) / (1.4 * uPx), 0.0, 1.0);
+  float a = clamp(0.5 - (d + (fz - 0.5) * uLook.w * 5.0 * uPx) / (1.4 * uPx), 0.0, 1.0);
   float blur = 0.004 + 0.012 * uLook.z;
   float sa = uLook.z > 0.0 ? smoothstep(blur, -blur, ds) * 0.5 * min(uLook.z * 1.5, 1.0) : 0.0;
   vec4 acc = vec4(0.0);
@@ -133,8 +188,8 @@ void main() {
   outColor = vec4(c.rgb * c.a, c.a);
 }`;
 
-  const SHAPES = ["rect", "ellipse", "polygon", "blob"];
-  const MATERIALS = ["paper", "felt", "clay", "foliage", "gradient", "photo"];
+  const SHAPES = ["rect", "ellipse", "polygon", "blob", "path"];
+  const MATERIALS = ["paper", "felt", "clay", "foliage", "gradient", "photo", "water", "sand", "stripes", "cardboard"];
 
   const half = (el) => [Math.max(el.w || 0.2, 0.002) / 2, Math.max(el.h || 0.2, 0.002) / 2];
   function lobeBounds(el) {
@@ -144,9 +199,15 @@ void main() {
       Math.max(...ls.map((l) => l[0] + l[2])), Math.max(...ls.map((l) => l[1] + l[2])),
     ];
   }
+  function pathBounds(el) {
+    const ps = el.points && el.points.length >= 3 ? el.points : [[-0.1, -0.1], [0.1, -0.1], [0, 0.1]];
+    const r = el.round || 0;
+    return [Math.min(...ps.map((p) => p[0])) - r, Math.min(...ps.map((p) => p[1])) - r, Math.max(...ps.map((p) => p[0])) + r, Math.max(...ps.map((p) => p[1])) + r];
+  }
   // The shape's outline box, before roughness, fuzz and shadow.
   function outline(el) {
     if (el.shape === "blob") return lobeBounds(el);
+    if (el.shape === "path") return pathBounds(el);
     const [hx, hy] = half(el);
     return [-hx, -hy, hx, hy];
   }
@@ -171,8 +232,19 @@ void main() {
       const b = outline(el);
       const hx = (b[2] - b[0]) / 2, hy = (b[3] - b[1]) / 2;
       gl.uniform1i(u.uShape, Math.max(0, SHAPES.indexOf(el.shape)));
-      gl.uniform2f(u.uHalf, ...(el.shape === "blob" ? [hx, hy] : half(el)));
-      gl.uniform4f(u.uForm, el.corner ?? 0.15, el.sides ?? 5, el.shape === "polygon" ? el.star ?? 0 : 0, 0);
+      const boxed = el.shape === "blob" || el.shape === "path";
+      gl.uniform2f(u.uHalf, ...(boxed ? [hx, hy] : half(el)));
+      gl.uniform4f(u.uForm, el.shape === "path" ? el.round || 0 : el.corner ?? 0.15, el.sides ?? 5, el.shape === "polygon" ? el.star ?? 0 : 0, 0);
+      if (el.shape === "path") {
+        const pts = (el.points || []).slice(0, 32);
+        const flatP = new Float32Array(64);
+        // Outline points are relative to the shape's center, so the box center has to be (0, 0) for them too.
+        pts.forEach((pt, i) => flatP.set(pt, i * 2));
+        gl.uniform2fv(u.uPts, flatP);
+        gl.uniform1i(u.uPtCount, pts.length);
+      } else gl.uniform1i(u.uPtCount, 0);
+      const st = el.stripes || {};
+      gl.uniform4f(u.uStripe, st.fan ? 1 : 0, st.fan ? st.count ?? 12 : st.width ?? 0.03, ...(st.center || [0, b[1]]));
       gl.uniform1i(u.uMat, Math.max(0, MATERIALS.indexOf(el.material)));
       const [c1, c2] = el.colors || ["#8A6FB8", "#E9C6E2"];
       gl.uniform3f(u.uCol1, ...rgb(c1));
