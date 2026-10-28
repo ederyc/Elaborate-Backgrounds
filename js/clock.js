@@ -20,7 +20,7 @@
     return {
       fps,
       get loop() { return LOOP; },
-      advance(dt) { seconds = (seconds + dt) % LOOP; },
+      advance(dt) { seconds = (((seconds + dt) % LOOP) + LOOP) % LOOP; },
       set(t) { seconds = ((t % LOOP) + LOOP) % LOOP; },
       get seconds() { return seconds; },
       // The beat index within the loop and the quantized time it stands for.

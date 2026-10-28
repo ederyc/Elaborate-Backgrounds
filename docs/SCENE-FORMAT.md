@@ -1,0 +1,116 @@
+# Scene file format (version 1)
+
+A scene is one JSON file. The editor saves and opens it, and the renderer draws it. It's the same shape as the study's [js/scenes/garden.js](../js/scenes/garden.js), plus the fields the editor adds. [js/editor/doc.js](../js/editor/doc.js) checks every file on open: it fills in missing values, clamps numbers to their ranges, and leaves out anything it can't draw, with a message saying what and why.
+
+## Units
+
+Everything is in **scene units**. The frame is 16:9: x runs from 0 (left) to 1.778 (right), and y from 0 (top) to 1 (bottom). Pieces can sit past the edges; parallax and dragging can bring them into view.
+
+## The file
+
+```json
+{
+  "format": "elaborate-backgrounds/scene",
+  "version": 1,
+  "title": "Tidepool at dusk",
+  "aspect": 1.7778,
+  "focus": [0.89, 0.5],
+  "background": "#1A1420",
+  "horizon": "#CDB8F5",
+  "camera": { "drift": [0.008, 0.003] },
+  "fps": 12,
+  "boil": 1,
+  "layers": [ ... ],
+  "post": { ... },
+  "grades": { "warm": { ... } },
+  "grade": "warm",
+  "images": { ... }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `focus` | The point a tall (phone) crop keeps centered |
+| `background` | The color behind every layer |
+| `horizon` | The color layers fade toward with `haze` (aerial perspective) |
+| `camera.drift` | How far the camera sways over one loop, at depth 1 |
+| `fps` | Beat rate: 12, 8 or 6. Every scene loops in 6 seconds at any rate. |
+| `boil` | Boil for the whole scene, multiplying each layer's own |
+| `art` | Optional. A bespoke art pack (the study uses `"garden"`) |
+
+## Layers
+
+Layers are listed back to front. Three kinds:
+
+**Paint layers** (no `type`) hold a `paint` list of pieces, baked into one texture.
+
+```json
+{ "id": "hills", "name": "Hills", "depth": 0.1, "far": true, "haze": 0.15, "boil": 1, "seed": 4,
+  "offset": [0, 0], "opacity": 1, "anim": { "type": "drift", "amp": [0.012, 0.002] },
+  "paint": [ ... ] }
+```
+
+**Flowers and leaves** (`"type": "sprite"`) sway from the base of their stem: `a` is the stem base, `b` the bend, `c` the flower head (or the leaf tip). `flower` is `daisy`, `tulip`, `orchid` or `bloom`; leave it out for a leaf. `colors` holds shadow, mid and light.
+
+**Sparkles** (`"type": "sparkles"`) twinkle inside `area` ([x0, y0, x1, y1]), with `count`, `size` and `color`.
+
+| Layer field | Meaning |
+| --- | --- |
+| `depth` | 0 is the sky, 1 touches the lens. Drives parallax. |
+| `far` | Drawn before the depth-softness blur, so it can be blurred |
+| `haze` | 0 to 0.5: how far toward the horizon color |
+| `boil` | Per-beat wobble in pixels at 1080p |
+| `seed` | Pins the layer's noise, so reordering layers never changes how one looks |
+| `offset` | Moves the whole layer without rebaking it |
+| `opacity` | 0 to 1 |
+| `anim` | `drift` (`amp: [x, y]`), `sway` (`amp` in radians, `speed` in whole sways per loop, `phase`), or `cycle` (`frames`, `rate`; bespoke art only) |
+| `pivot` | Where a paint layer sways from: `"base"` (default) or `"center"` |
+| `hidden`, `locked` | Editor flags. Hidden layers don't render. |
+| `rect` | Optional. The area a bespoke shader paints. Paint layers work it out from their pieces otherwise. |
+| `res` | Optional bake resolution, relative to the screen (0.5 for soft layers) |
+
+## Pieces
+
+Every piece can carry `xf: { "x", "y", "s", "r" }`: move, scale and rotate (radians). Shapes and images are drawn around (0, 0), so for them `x` and `y` are simply where the piece sits. Every piece also gets an `id`, and can have a `name`.
+
+**Shapes**
+
+```json
+{ "el": "shape", "shape": "polygon", "sides": 5, "star": 0.6, "w": 0.14, "h": 0.14,
+  "material": "felt", "colors": ["#F2C94C", "#FFE9A8"], "grain": 1,
+  "rough": 0.5, "fuzz": 0.8, "puff": 0.7, "shadow": 0.4,
+  "specks": { "scale": 140, "density": 0.2, "size": 0.3, "colors": ["#F5F2CC", "#FAF8F0"] },
+  "xf": { "x": 0.9, "y": 0.3, "s": 1, "r": 0 } }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `shape` | `rect` (with `corner`, 0 to 1), `ellipse`, `polygon` (with `sides`, and `star` 0 to 1), or `blob` (with `lobes`: [x, y, radius] circles blended together, and `merge`) |
+| `w`, `h` | Size, for everything but blobs |
+| `material` | `paper`, `felt`, `clay`, `foliage` (second color = tips), `gradient` (top and bottom colors), or `photo` (with `image`, `tile` and `tint`) |
+| `grain` | Pattern size multiplier for the material |
+| `rough` | Rough cut edge, 0 to 1 |
+| `fuzz` | Fibers breaking up the edge, 0 to 1 |
+| `puff` | How much the piece rounds over and catches the light, 0 to 1 |
+| `shadow` | A soft shadow cast down and right, away from the top-left light, 0 to 1 |
+| `specks` | Optional beads or tiny flowers |
+
+**Images**: `{ "el": "image", "image": "img-x1y2z", "w": 0.4, "h": 0.3, "tint": 0, "tintColor": "#FFFFFF" }`.
+
+**The study's elements**: `canopy`, `florets`, `trunk`, `branch`, `turf` and `fuzz`, with the fields described at the top of [js/elements.js](../js/elements.js).
+
+**Bespoke shaders**: `{ "shader": "waterfall" }` draws a shader from the scene's art pack over the layer's `rect`.
+
+## Images
+
+Imported pictures are embedded, so a scene file works on its own:
+
+```json
+"images": { "img-x1y2z": { "name": "green felt", "src": "data:image/jpeg;base64,...", "w": 2048, "h": 1536 } }
+```
+
+Pictures are shrunk to at most 2048 px on the long side when imported. Photos stay JPEG, and anything that might have transparency stays PNG. Saving drops pictures nothing uses.
+
+## Look
+
+`post` holds each pass's settings and `post.on` its switches. `grades` holds named grades, and `grade` names the one in use. The fields match the Look panel, and [js/post.js](../js/post.js) documents each pass.

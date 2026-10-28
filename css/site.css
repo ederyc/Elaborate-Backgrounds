@@ -93,6 +93,8 @@ h1 {
   transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 .btn:hover { background: var(--gold); color: var(--bg); }
+.btn-quiet { border-color: var(--line-strong); padding: 0 var(--space-4); text-decoration: none; }
+.btn-quiet:hover { background: var(--ink); color: var(--bg); }
 .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
 .icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

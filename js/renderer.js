@@ -1,17 +1,22 @@
 /*
-  The renderer: bakes a scene's layers into textures once, then composites
-  them every beat and runs the post stack.
+  The renderer: bakes a scene's layers into textures, then composites them
+  every beat and runs the post stack.
 
-  Baking: every bake program is compiled up front, in parallel where the
-  browser supports it. Then each layer's paint list (bespoke art shaders and
-  generic elements) is drawn into its texture, each item only over its own
-  bounding box. Cycle animations bake one texture per frame.
+  Baking: each layer's paint list (bespoke art shaders, reusable elements,
+  shapes and images) is drawn into its texture, each item only over its own
+  bounding box. Cycle animations bake one texture per frame. Bake programs
+  compile once, in parallel where the browser supports it, and are cached.
+
+  Syncing: sync(scene) takes a new version of the scene and rebakes only
+  the layers whose look changed. Moving a whole layer, changing its depth,
+  boil, haze, motion or opacity, or hiding it needs no rebake at all. That
+  is what lets the editor change one thing and see it on the next frame.
 
   Per beat: every layer is one textured quad, drawn back to front with
   premultiplied alpha. Its position comes from camera drift times its depth
-  (parallax) plus its own animation (drift, sway or a cycle of baked
-  frames). Boil wobbles each layer's texture lookup with a smooth noise that
-  changes seed on the beat.
+  (parallax), plus its own offset and animation (drift, sway or a cycle of
+  baked frames). Boil wobbles each layer's texture lookup with a smooth
+  noise that changes seed on the beat.
 
   Work is only done when something changes: the scene and the bloom chain
   re-render on a new beat or a new setting, and the final pass re-runs every
@@ -45,13 +50,13 @@ in vec2 vUv;
 uniform sampler2D uTex, uNoise;
 uniform vec2 uBoilScale, uBoilSeed, uBoilAmp;
 uniform vec3 uHaze;
-uniform float uHazeAmt;
+uniform float uHazeAmt, uAlpha;
 out vec4 outColor;
 void main() {
   vec2 n = texture(uNoise, vUv * uBoilScale + uBoilSeed).rg - 0.5;
   vec4 c = texture(uTex, vUv + n * uBoilAmp);
   c.rgb = mix(c.rgb, uHaze * c.a, uHazeAmt);
-  outColor = c;
+  outColor = c * uAlpha;
 }`;
 
   // Sparkles: one instanced draw. Each twinkles 1-3 times per loop, so the loop stays seamless.
@@ -80,14 +85,20 @@ void main() {
 in vec2 vUv;
 in float vBright;
 uniform vec3 uColor;
+uniform float uAlpha;
 out vec4 outColor;
 void main() {
   float r = length(vUv);
   float core = exp(-r * r * 9.0);
   float star = exp(-abs(vUv.x) * 16.0) * exp(-abs(vUv.y) * 2.6) + exp(-abs(vUv.y) * 16.0) * exp(-abs(vUv.x) * 2.6);
-  float a = clamp((core + star * 0.55) * vBright, 0.0, 1.0);
+  float a = clamp((core + star * 0.55) * vBright, 0.0, 1.0) * uAlpha;
   outColor = vec4(uColor * a, a * 0.85);
 }`;
+
+  // Layer fields that only change how a baked layer is placed and blended, never what's in it.
+  const COMPOSITE_KEYS = new Set(["baseRect", "order", "sig", "id", "name", "depth", "boil", "haze", "far", "offset", "opacity", "hidden", "locked", "pivot", "anim", "index", "note"]);
+  // Scene bounds a layer's texture may cover (the frame plus room for parallax and dragging past the edge).
+  const LIMIT = [-0.35, -0.35, 16 / 9 + 0.35, 1.35];
 
   // Deterministic per-beat randomness for boil.
   function rand(n) {
@@ -95,14 +106,14 @@ void main() {
     return x - Math.floor(x);
   }
 
-  function createRenderer(canvas, scene, opts = {}) {
+  function createRenderer(canvas, initialScene, opts = {}) {
     const gl = canvas.getContext("webgl2", {
       alpha: false, antialias: false, depth: false, stencil: false,
       premultipliedAlpha: false, preserveDrawingBuffer: !!opts.preserve, powerPreference: "high-performance",
     });
     if (!gl) throw new Error("WebGL2 is not available");
     const { program, target, freeTarget, quad, bindTarget, bindTex, rgb, texture, FULLSCREEN_VERT } = G();
-    const art = LB.art[scene.art];
+    const I = LB.ITEMS;
     const P = LB.POST_GLSL;
     const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     const vao = quad(gl);
@@ -121,60 +132,178 @@ void main() {
     const noiseData = new Uint8Array(64 * 64 * 4);
     for (let i = 0; i < noiseData.length; i++) noiseData[i] = Math.floor(rand(i * 1.618 + 3) * 256);
     const noiseTex = texture(gl, 64, 64, { data: noiseData, repeat: true });
+    // Bound wherever a bake shader has a sampler but no image to read.
+    const whiteTex = texture(gl, 1, 1, { data: new Uint8Array([255, 255, 255, 255]) });
 
     const quality = opts.quality || "high";
     const bloomLevels = quality === "low" ? 3 : 5;
     // Bake density, in texture px per scene unit. Fixed at load, from the screen, so resizing never re-bakes.
     const density = Math.min(quality === "low" ? 720 : 1200, Math.max(540, Math.round(opts.bakeHeight || 1080)));
 
-    const layers = scene.layers.map((L, index) => {
-      const l = { ...L, index };
-      if (L.type === "sprite") l.rect = LB.SPRITE.bbox(l);
-      return l;
-    });
-
+    let scene = initialScene;
+    let layers = [];
     let W = 0, H = 0;
     let view = [0, 0, 1, 1];
     let rt = {};
     let post = null;
     let lastBeat = -1, dirty = true, baked = false;
-    let grade = scene.grades[scene.grade];
+    let grade = scene.grades ? scene.grades[scene.grade] : null;
+
+    const progCache = new Map();  // bake program key -> compiled program
+    const layerCache = new Map(); // layer id -> { sig, textures, texSize }
+    const imageCache = new Map(); // image id -> { tex, w, h }
+    LB.imageInfo = (id) => imageCache.get(id);
+
+    // ---------- what each layer needs ----------
+    const art = () => (scene.art && LB.art ? LB.art[scene.art] : null);
+    const paintOf = (L) => (L.type === "sprite" ? [{ sprite: true }] : L.paint || []);
+    const progKey = (item) => (item.sprite ? "sprite" : item.shader ? "art:" + item.shader : "el:" + item.el);
+    function progSource(key) {
+      const [kind, name] = key.split(":");
+      let body;
+      if (kind === "sprite") body = LB.SPRITE.glsl;
+      else if (kind === "art") body = art() && art().bakes[name];
+      else body = LB.ELEMENTS[name] && LB.ELEMENTS[name].glsl;
+      if (!body) throw new Error(`Nothing draws "${key}"`);
+      return LB.MATERIALS_GLSL + body;
+    }
+
+    // The scene rect a layer's texture covers. Scene files can give one; otherwise it's the
+    // union of what the layer paints. Items moved out of a given rect stretch it to follow.
+    function layerRect(L) {
+      if (L.type === "sprite") return LB.SPRITE.bbox(L);
+      let r = L.rect ? L.rect.slice() : null;
+      for (const item of L.paint || []) {
+        if (item.shader && !L.rect) r = I.union(r, LIMIT);
+        else if (!L.rect || !I.isIdentity(item)) r = I.union(r, I.worldBox(item, L));
+      }
+      r = r || [0, 0, 0.01, 0.01];
+      return [Math.max(r[0], LIMIT[0]), Math.max(r[1], LIMIT[1]), Math.min(r[2], LIMIT[2]), Math.min(r[3], LIMIT[3])];
+    }
+
+    function signature(L) {
+      const frames = L.anim && L.anim.type === "cycle" ? L.anim.frames : 1;
+      return JSON.stringify(L, (k, v) => (COMPOSITE_KEYS.has(k) ? undefined : v)) + "|" + frames + "|" + L.index + "|" + scene.art;
+    }
+
+    function prepare(L, i) {
+      // "index" seeds the boil and the bake noise. A layer can pin it with "seed" so reordering layers never changes how one looks.
+      const l = { ...L, index: L.seed ?? i, order: i, baseRect: L.rect };
+      if (l.type !== "sparkles") {
+        l.rect = layerRect(L);
+        l.sig = signature(l);
+        const cached = layerCache.get(l.id);
+        if (cached && cached.sig === l.sig) {
+          l.textures = cached.textures;
+          l.texSize = cached.texSize;
+        }
+      }
+      return l;
+    }
+
+    // ---------- images ----------
+    function loadImage(id, src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const tex = texture(gl, 1, 1, { repeat: true });
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, img);
+          imageCache.set(id, { tex, w: img.naturalWidth, h: img.naturalHeight, src });
+          resolve();
+        };
+        img.onerror = () => reject(new Error(`Image "${id}" didn't load`));
+        img.src = src;
+      });
+    }
+    async function ensureImages(list) {
+      const want = new Set();
+      for (const L of list) for (const item of L.paint || []) I.images(item).forEach((id) => want.add(id));
+      const jobs = [];
+      for (const id of want) {
+        const def = scene.images && scene.images[id];
+        if (!def) continue;
+        const have = imageCache.get(id);
+        if (have && have.src === def.src) continue;
+        if (have) gl.deleteTexture(have.tex);
+        jobs.push(loadImage(id, def.src));
+      }
+      await Promise.all(jobs);
+    }
+
+    // ---------- programs ----------
+    async function ensurePrograms(keys) {
+      const missing = [...new Set(keys)].filter((k) => !progCache.has(k));
+      if (!missing.length) return;
+      const t0 = performance.now();
+      const compiled = await LB.gl.programs(gl, missing.map((k) => [FULLSCREEN_VERT, progSource(k), "bake " + k]));
+      missing.forEach((k, i) => progCache.set(k, compiled[i]));
+      if (opts.timeBake) { gl.finish(); console.log(`compile ${missing.length} bake programs: ${(performance.now() - t0).toFixed(0)}ms`); }
+    }
 
     // ---------- baking ----------
-    // What draws each layer: a sprite, or a paint list of bespoke shaders and generic elements.
-    const paintOf = (L) => (L.type === "sprite" ? [{ sprite: true }] : L.paint);
-    const progKey = (item) => (item.sprite ? "sprite" : item.shader ? "art:" + item.shader : "el:" + item.el);
-    const progSource = (key) => {
-      const [kind, name] = key.split(":");
-      const body = kind === "sprite" ? LB.SPRITE.glsl : kind === "art" ? art.bakes[name] : LB.ELEMENTS[name].glsl;
-      return LB.MATERIALS_GLSL + body;
-    };
+    // Paints a layer's items into the currently bound target, which covers "rect" at w x h px.
+    function paintLayer(L, rect, w, h, frame) {
+      const [rx0, ry0, rx1, ry1] = rect;
+      const TILE = 512;
+      // Bespoke shaders cover the rect the scene file gave, even when moved items have stretched the texture.
+      const host = L.type === "sprite" ? L : { rect: L.baseRect || L.rect };
+      paintOf(L).forEach((item, pi) => {
+        const pr = progCache.get(progKey(item));
+        gl.useProgram(pr.prog);
+        const t = item.sprite ? I.IDENTITY : I.xfOf(item);
+        const o = item.sprite ? [0, 0] : I.origin(item, host);
+        gl.uniform4f(pr.u.uRect, rx0, ry0, rx1, ry1);
+        gl.uniform2f(pr.u.uRes, w, h);
+        gl.uniform1f(pr.u.uPx, (ry1 - ry0) / h / t.s);
+        gl.uniform1f(pr.u.uSeed, L.index * 1.37 + pi * 0.71);
+        gl.uniform1f(pr.u.uFrame, frame);
+        gl.uniform1i(pr.u.uN, item.n || 0);
+        gl.uniform1i(pr.u.uOne, 1);
+        gl.uniform4f(pr.u.uXf, t.x, t.y, t.s, t.r);
+        gl.uniform2f(pr.u.uXfOrigin, o[0], o[1]);
+        const imgs = item.sprite ? [] : I.images(item);
+        const img = imgs.length && imageCache.get(imgs[0]);
+        bindTex(gl, 0, img ? img.tex : whiteTex);
+        gl.uniform1i(pr.u.uImage, 0);
+        let box = rect;
+        if (item.sprite) LB.SPRITE.set(gl, pr.u, L);
+        else if (item.el) {
+          LB.ELEMENTS[item.el].set(gl, pr.u, item, t);
+          box = I.worldBox(item, host);
+        } else if (!I.isIdentity(item)) box = I.worldBox(item, host);
+        // Only touch the pixels this item can cover, in tiles so no single draw runs long.
+        const px0 = Math.max(0, Math.floor(((box[0] - rx0) / (rx1 - rx0)) * w));
+        const px1 = Math.min(w, Math.ceil(((box[2] - rx0) / (rx1 - rx0)) * w));
+        const py0 = Math.max(0, Math.floor(((box[1] - ry0) / (ry1 - ry0)) * h));
+        const py1 = Math.min(h, Math.ceil(((box[3] - ry0) / (ry1 - ry0)) * h));
+        gl.enable(gl.SCISSOR_TEST);
+        for (let y = py0; y < py1; y += TILE) {
+          for (let x = px0; x < px1; x += TILE) {
+            gl.scissor(x, y, Math.min(TILE, px1 - x), Math.min(TILE, py1 - y));
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          }
+        }
+        gl.disable(gl.SCISSOR_TEST);
+      });
+    }
 
-    async function bake(onProgress) {
-      // Compile every bake program first, all at once.
-      const keys = [...new Set(layers.filter((L) => L.type !== "sparkles").flatMap((L) => paintOf(L).map(progKey)))];
-      const t0 = performance.now();
-      const compiled = await LB.gl.programs(gl, keys.map((k) => [FULLSCREEN_VERT, progSource(k), "bake " + k]));
-      const bakeProgs = Object.fromEntries(keys.map((k, i) => [k, compiled[i]]));
-      if (opts.timeBake) { gl.finish(); console.log(`compile ${keys.length} bake programs: ${(performance.now() - t0).toFixed(0)}ms`); }
-      if (onProgress) onProgress(0.5);
-
+    async function bakeLayers(list, onProgress) {
       const t1 = performance.now();
       const jobs = [];
-      for (const L of layers) {
-        if (L.type === "sparkles") continue;
+      for (const L of list) {
         const frames = L.anim && L.anim.type === "cycle" ? L.anim.frames : 1;
         const res = L.res || 1;
         let w = (L.rect[2] - L.rect[0]) * density * res;
         let h = (L.rect[3] - L.rect[1]) * density * res;
         const shrink = Math.min(1, maxTex / Math.max(w, h));
-        w = Math.round(w * shrink);
-        h = Math.round(h * shrink);
+        w = Math.max(1, Math.round(w * shrink));
+        h = Math.max(1, Math.round(h * shrink));
         L.texSize = [w, h];
         L.textures = [];
         for (let f = 0; f < frames; f++) jobs.push({ L, f, w, h });
       }
-      const TILE = 512;
       let lastYield = performance.now();
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -185,52 +314,63 @@ void main() {
         bindTarget(gl, t);
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        const [rx0, ry0, rx1, ry1] = L.rect;
-        paintOf(L).forEach((item, pi) => {
-          const pr = bakeProgs[progKey(item)];
-          gl.useProgram(pr.prog);
-          gl.uniform4f(pr.u.uRect, rx0, ry0, rx1, ry1);
-          gl.uniform2f(pr.u.uRes, w, h);
-          gl.uniform1f(pr.u.uPx, (ry1 - ry0) / h);
-          gl.uniform1f(pr.u.uSeed, L.index * 1.37 + pi * 0.71);
-          gl.uniform1f(pr.u.uFrame, f);
-          gl.uniform1i(pr.u.uN, item.n || 0);
-          gl.uniform1i(pr.u.uOne, 1);
-          let box = [rx0, ry0, rx1, ry1];
-          if (item.sprite) LB.SPRITE.set(gl, pr.u, L);
-          else if (item.el) {
-            const E = LB.ELEMENTS[item.el];
-            E.set(gl, pr.u, item);
-            box = E.bbox(item);
-          }
-          // Only touch the pixels this item can cover, in tiles so no single draw runs long.
-          const px0 = Math.max(0, Math.floor(((box[0] - rx0) / (rx1 - rx0)) * w));
-          const px1 = Math.min(w, Math.ceil(((box[2] - rx0) / (rx1 - rx0)) * w));
-          const py0 = Math.max(0, Math.floor(((box[1] - ry0) / (ry1 - ry0)) * h));
-          const py1 = Math.min(h, Math.ceil(((box[3] - ry0) / (ry1 - ry0)) * h));
-          gl.enable(gl.SCISSOR_TEST);
-          for (let y = py0; y < py1; y += TILE) {
-            for (let x = px0; x < px1; x += TILE) {
-              gl.scissor(x, y, Math.min(TILE, px1 - x), Math.min(TILE, py1 - y));
-              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            }
-          }
-          gl.disable(gl.SCISSOR_TEST);
-        });
+        paintLayer(L, L.rect, w, h, f);
         gl.flush();
         L.textures.push(t.tex);
         gl.deleteFramebuffer(t.fb);
         if (performance.now() - lastYield > 30) {
+          gl.disable(gl.BLEND);
           if (onProgress) onProgress(0.5 + 0.5 * (ji / jobs.length));
           await new Promise((r) => setTimeout(r, 0));
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+          gl.bindVertexArray(vao);
           lastYield = performance.now();
         }
       }
       gl.disable(gl.BLEND);
-      if (opts.timeBake) { gl.finish(); console.log(`bake ${jobs.length} textures: ${(performance.now() - t1).toFixed(0)}ms`); }
+      if (opts.timeBake && jobs.length) { gl.finish(); console.log(`bake ${jobs.length} textures: ${(performance.now() - t1).toFixed(0)}ms`); }
+    }
+
+    async function applyScene(next, onProgress) {
+      scene = next;
+      const list = next.layers.map(prepare);
+      const stale = list.filter((L) => L.type !== "sparkles" && !L.textures);
+      if (stale.length) {
+        await ensureImages(stale);
+        await ensurePrograms(stale.flatMap((L) => paintOf(L).map(progKey)));
+        if (onProgress) onProgress(0.5);
+        await bakeLayers(stale, onProgress);
+      }
+      // Swap in the new list, then free textures nothing uses any more.
+      const keep = new Set(list.flatMap((L) => L.textures || []));
+      for (const c of layerCache.values()) for (const tex of c.textures) if (!keep.has(tex)) gl.deleteTexture(tex);
+      layerCache.clear();
+      for (const L of list) if (L.textures) layerCache.set(L.id, { sig: L.sig, textures: L.textures, texSize: L.texSize });
+      layers = list;
       if (onProgress) onProgress(1);
       baked = true;
       dirty = true;
+    }
+
+    // Coalesces rapid edits: while one sync runs, only the newest scene waits behind it.
+    let running = null, pending = null;
+    function sync(next, onProgress) {
+      pending = next;
+      if (!running) {
+        running = (async () => {
+          try {
+            while (pending) {
+              const s = pending;
+              pending = null;
+              await applyScene(s, onProgress);
+            }
+          } finally {
+            running = null;
+          }
+        })();
+      }
+      return running;
     }
 
     // ---------- sizing ----------
@@ -281,9 +421,21 @@ void main() {
     }
     function drawQuad() { gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
 
-    function layerPose(L, t, seed, cam) {
+    function cameraAt(t) {
+      const d = scene.camera.drift;
+      return post.motion ? [d[0] * Math.sin(TAU * t / LB.LOOP), d[1] * Math.sin(2 * TAU * t / LB.LOOP)] : [0, 0];
+    }
+
+    function pivotOf(L) {
+      if (L.type === "sprite") return L.a;
+      const [x0, y0, x1, y1] = L.rect;
+      return L.pivot === "center" ? [(x0 + x1) / 2, (y0 + y1) / 2] : [(x0 + x1) / 2, y1];
+    }
+
+    function layerPose(L, t, seed, cam, jitter = true) {
       const loop = LB.LOOP;
-      let ox = cam[0] * L.depth, oy = cam[1] * L.depth, angle = 0, frame = 0;
+      const off = L.offset || [0, 0];
+      let ox = cam[0] * (L.depth || 0) + off[0], oy = cam[1] * (L.depth || 0) + off[1], angle = 0, frame = 0;
       const a = L.anim;
       if (a && post.motion) {
         if (a.type === "drift") {
@@ -297,7 +449,7 @@ void main() {
         }
       }
       // Sprites also get a tiny per-beat nudge, like a puppet that never sits in exactly the same spot.
-      if (L.type === "sprite" && post.boil > 0) {
+      if (jitter && L.type === "sprite" && post.boil > 0) {
         const k = post.boil * view[3] / 1080;
         angle += (rand(L.index * 31 + seed * 7) - 0.5) * 0.008 * post.boil;
         ox += (rand(L.index * 17 + seed * 3) - 0.5) * k;
@@ -317,16 +469,17 @@ void main() {
       const haze = rgb(scene.horizon);
       gl.uniform3f(u.uHaze, ...haze);
       for (const L of list) {
-        if (post.hidden && post.hidden[L.id]) continue;
+        if (L.hidden || (post.hidden && post.hidden[L.id])) continue;
         if (L.type === "sparkles") {
           drawSparkles(L, t, seed, cam);
           gl.useProgram(progs.layer.prog);
           gl.bindVertexArray(vao);
           continue;
         }
+        if (!L.textures || !L.textures.length) continue;
         const pose = layerPose(L, t, seed, cam);
         const [x0, y0, x1, y1] = L.rect;
-        const pivot = L.type === "sprite" ? L.a : [(x0 + x1) / 2, (y0 + y1) / 2];
+        const pivot = pivotOf(L);
         gl.uniform4f(u.uRect, x0, y0, x1, y1);
         gl.uniform2f(u.uPivot, pivot[0], pivot[1]);
         gl.uniform1f(u.uAngle, pose.angle);
@@ -337,32 +490,35 @@ void main() {
         gl.uniform2f(u.uBoilSeed, rand(seed * 3 + L.index) * 64, rand(seed * 5 + L.index + 0.5) * 64);
         gl.uniform2f(u.uBoilAmp, (amp * 2) / (x1 - x0), (amp * 2) / (y1 - y0));
         gl.uniform1f(u.uHazeAmt, (L.haze || 0) * post.haze);
-        bindTex(gl, 0, L.textures[pose.frame]);
+        gl.uniform1f(u.uAlpha, L.opacity ?? 1);
+        bindTex(gl, 0, L.textures[Math.min(pose.frame, L.textures.length - 1)]);
         drawQuad();
       }
     }
 
     function drawSparkles(L, t, seed, cam) {
       const u = progs.sparkle.u;
+      const off = L.offset || [0, 0];
       gl.useProgram(progs.sparkle.prog);
       gl.bindVertexArray(vao);
       gl.uniform4f(u.uArea, ...L.area);
       gl.uniform4f(u.uView, ...view);
-      gl.uniform2f(u.uOffset, cam[0] * L.depth, cam[1] * L.depth);
+      gl.uniform2f(u.uOffset, cam[0] * L.depth + off[0], cam[1] * L.depth + off[1]);
       gl.uniform1f(u.uSize, L.size);
       gl.uniform1f(u.uTime, post.motion ? t : 0.4);
       gl.uniform1f(u.uLoop, LB.LOOP);
       gl.uniform1f(u.uJitter, post.boil > 0 ? seed + 1 : 0);
       gl.uniform3f(u.uColor, ...rgb(L.color));
+      gl.uniform1f(u.uAlpha, L.opacity ?? 1);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, L.count);
     }
 
     function renderScene(clock) {
       const t = clock.beatTime, seed = clock.boilSeed;
-      const d = scene.camera.drift;
-      const cam = post.motion ? [d[0] * Math.sin(TAU * t / LB.LOOP), d[1] * Math.sin(2 * TAU * t / LB.LOOP)] : [0, 0];
+      const cam = cameraAt(t);
       bindTarget(gl, rt.scene);
-      gl.clearColor(0, 0, 0, 1);
+      const bg = rgb(scene.background || "#000000");
+      gl.clearColor(bg[0], bg[1], bg[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -490,11 +646,76 @@ void main() {
       return drew;
     }
 
+    // ---------- reading back ----------
+    // The last drawn frame, top row first. Call it right after draw(), in the same task.
+    function readPixels() {
+      const px = new Uint8Array(W * H * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const out = new Uint8ClampedArray(W * H * 4);
+      const row = W * 4;
+      for (let y = 0; y < H; y++) out.set(px.subarray((H - 1 - y) * row, (H - y) * row), y * row);
+      return new ImageData(out, W, H);
+    }
+
+    // Bakes one layer on its own into a small image, for library thumbnails. Straight alpha.
+    async function thumbnail(layerDef, w, h, sceneOverride) {
+      const prevScene = scene;
+      if (sceneOverride) scene = sceneOverride;
+      try {
+        const L = { ...layerDef, index: layerDef.seed ?? 0 };
+        if (L.type === "sparkles") return null;
+        await ensureImages([L]);
+        await ensurePrograms(paintOf(L).map(progKey));
+        // Fit the layer's rect into w x h, centered.
+        const r = layerRect(L);
+        const rw = r[2] - r[0], rh = r[3] - r[1];
+        const k = Math.max(rw / w, rh / h) * 1.08;
+        const cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
+        const rect = [cx - (w * k) / 2, cy - (h * k) / 2, cx + (w * k) / 2, cy + (h * k) / 2];
+        const t = target(gl, w, h);
+        bindTarget(gl, t);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.bindVertexArray(vao);
+        paintLayer(L, rect, w, h, 0);
+        gl.disable(gl.BLEND);
+        const px = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        freeTarget(gl, t);
+        dirty = true;
+        // The bake writes row 0 at the top of the rect, so rows are already top first. Undo premultiplication.
+        const out = new Uint8ClampedArray(px.length);
+        for (let i = 0; i < px.length; i += 4) {
+          const a = px[i + 3];
+          const m = a ? 255 / a : 0;
+          out[i] = px[i] * m; out[i + 1] = px[i + 1] * m; out[i + 2] = px[i + 2] * m; out[i + 3] = a;
+        }
+        return new ImageData(out, w, h);
+      } finally {
+        scene = prevScene;
+      }
+    }
+
+    // Where a layer sits on screen right now, without the per-beat boil nudge (for the editor's overlay).
+    function poseOf(id, clock) {
+      const L = layers.find((l) => l.id === id);
+      if (!L || !post) return null;
+      const t = clock.beatTime;
+      const p = layerPose(L, t, clock.boilSeed, cameraAt(t), false);
+      return { ...p, rect: L.rect, pivot: L.type === "sparkles" ? null : pivotOf(L) };
+    }
+
     return {
-      gl, bake, resize, setPost, setGrade, invalidate, draw,
+      gl, resize, setPost, setGrade, invalidate, draw, sync, readPixels, thumbnail, poseOf,
+      bake: (onProgress) => sync(scene, onProgress),
       get size() { return [W, H]; },
+      get view() { return view; },
       get density() { return density; },
       get layers() { return layers; },
+      get busy() { return !!running; },
     };
   }
 

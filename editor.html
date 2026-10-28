@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backdrop Editor</title>
+<meta name="description" content="Make looping stop-motion wallpapers in the browser: layers at depths, handmade-looking shapes and materials, swaying flowers, boil and a soft film look. Export stills and video loops.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23000000'/%3E%3Ctext x='16' y='23' font-family='Georgia, serif' font-size='19' font-weight='700' fill='%23D9A441' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+<a class="skip" href="#viewport">Skip to the canvas</a>
+
+<header class="topbar">
+  <h1 class="sr-only">Backdrop Editor</h1>
+  <div class="brand">
+    <a class="home" href="index.html" title="Back to the garden study"><span aria-hidden="true">E</span><span class="sr-only">Back to the garden study</span></a>
+    <label class="sr-only" for="doc-title">Scene name</label>
+    <input id="doc-title" class="title-input" type="text" maxlength="80" value="Untitled scene" autocomplete="off" spellcheck="false">
+    <span class="save-state" id="save-state" aria-live="polite"></span>
+  </div>
+
+  <div class="toolbar">
+    <div class="group" role="group" aria-label="File">
+      <button type="button" class="tb-btn" id="btn-new">New</button>
+      <button type="button" class="tb-btn" id="btn-open">Open</button>
+      <button type="button" class="tb-btn" id="btn-save" title="Save the scene as a file (Ctrl+S)">Save file</button>
+      <input type="file" id="file-open" accept=".json,application/json" hidden>
+    </div>
+    <div class="group" role="group" aria-label="Undo and redo">
+      <button type="button" class="icon-btn" id="btn-undo" aria-label="Undo" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+      <button type="button" class="icon-btn" id="btn-redo" aria-label="Redo" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+    </div>
+    <div class="group tools" role="group" aria-label="Tools">
+      <button type="button" class="icon-btn" data-tool="select" aria-pressed="true" title="Select and move (V)" aria-label="Select and move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
+      <button type="button" class="icon-btn" data-tool="rect" aria-pressed="false" title="Draw a rectangle (R)" aria-label="Draw a rectangle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="2"/></svg></button>
+      <button type="button" class="icon-btn" data-tool="ellipse" aria-pressed="false" title="Draw an ellipse (E)" aria-label="Draw an ellipse"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg></button>
+      <button type="button" class="icon-btn" data-tool="triangle" aria-pressed="false" title="Draw a triangle (T)" aria-label="Draw a triangle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/></svg></button>
+      <button type="button" class="icon-btn" data-tool="star" aria-pressed="false" title="Draw a star (S)" aria-label="Draw a star"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>
+      <button type="button" class="icon-btn" data-tool="cloud" aria-pressed="false" title="Draw a cloud (C)" aria-label="Draw a cloud"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6-1A4.5 4.5 0 0 1 17.5 18z"/></svg></button>
+    </div>
+    <div class="group" role="group" aria-label="Preview shape">
+      <button type="button" class="tb-btn" data-preview="desktop" aria-pressed="true">Desktop</button>
+      <button type="button" class="tb-btn" data-preview="phone" aria-pressed="false">Phone</button>
+    </div>
+    <button type="button" class="tb-btn primary" id="btn-export">Export</button>
+  </div>
+</header>
+
+<main class="workspace">
+  <aside class="panel panel-left" aria-label="Layers and store">
+    <section class="layers" aria-labelledby="layers-h">
+      <div class="panel-head">
+        <h2 id="layers-h">Layers</h2>
+        <p class="panel-hint">Front at the top</p>
+      </div>
+      <ul id="layer-list" class="layer-list"></ul>
+      <div class="panel-actions" role="group" aria-label="Layer actions">
+        <button type="button" class="btn-small" id="btn-add-layer">New layer</button>
+        <button type="button" class="btn-small" id="btn-dup" title="Duplicate (Ctrl+D)">Duplicate</button>
+        <button type="button" class="btn-small" id="btn-fwd" title="Bring forward (])">Forward</button>
+        <button type="button" class="btn-small" id="btn-back" title="Send backward ([)">Backward</button>
+        <button type="button" class="btn-small danger" id="btn-del" title="Delete (Delete key on the canvas)">Delete</button>
+      </div>
+    </section>
+    <section class="store" aria-labelledby="store-h">
+      <div class="panel-head">
+        <h2 id="store-h">Store</h2>
+        <button type="button" class="btn-small" id="btn-import">Import picture</button>
+        <input type="file" id="file-image" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+      </div>
+      <div class="store-cats" id="store-cats" role="group" aria-label="Store categories"></div>
+      <div class="store-grid" id="store-grid"></div>
+    </section>
+  </aside>
+
+  <section class="stage" aria-label="Scene">
+    <div class="stage-inner">
+      <div id="viewport" class="viewport is-loading" tabindex="0" role="application" aria-roledescription="scene canvas" aria-label="Scene canvas" aria-describedby="viewport-help">
+        <canvas id="scene" aria-hidden="true"></canvas>
+        <svg id="overlay" class="overlay" aria-hidden="true"></svg>
+        <p class="loading" id="loading">Building the scene…</p>
+      </div>
+    </div>
+    <p id="viewport-help" class="sr-only">Click a piece to select it, then drag to move it. With the canvas focused, arrow keys move the selection, Shift with an arrow moves it further, Delete removes it and Escape deselects. The Layers list and the Properties panel do everything the mouse does.</p>
+    <div class="transport">
+      <button type="button" class="icon-btn play" id="btn-play" data-playing="false" aria-label="Play" title="Play (Space)">
+        <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>
+        <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+      </button>
+      <label class="sr-only" for="scrub">Beat in the loop</label>
+      <input type="range" id="scrub" min="0" max="71" step="1" value="0">
+      <output id="beat-readout" for="scrub">Beat 1 of 72</output>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <aside class="panel panel-right" aria-label="Properties and look">
+    <div class="tabs" role="tablist" aria-label="Side panel">
+      <button type="button" role="tab" id="tab-props" aria-controls="pane-props" aria-selected="true">Properties</button>
+      <button type="button" role="tab" id="tab-look" aria-controls="pane-look" aria-selected="false" tabindex="-1">Look</button>
+    </div>
+    <div id="pane-props" class="pane" role="tabpanel" aria-labelledby="tab-props" tabindex="0"></div>
+    <div id="pane-look" class="pane" role="tabpanel" aria-labelledby="tab-look" tabindex="0" hidden></div>
+  </aside>
+</main>
+
+<dialog id="dlg-new" aria-labelledby="dlg-new-h">
+  <h2 id="dlg-new-h">New scene</h2>
+  <p>This replaces the scene you have open. If you want to keep it, use Save file first.</p>
+  <div class="template-list">
+    <button type="button" class="template" data-template="blank">
+      <span class="t-name">Blank backdrop</span>
+      <span class="t-note">A painted wash to build on.</span>
+    </button>
+    <button type="button" class="template" data-template="study">
+      <span class="t-name">Garden study</span>
+      <span class="t-note">The study of a stop-motion backdrop by Tamara, with every piece editable.</span>
+    </button>
+  </div>
+  <div class="dlg-actions"><button type="button" class="btn-small" data-close>Cancel</button></div>
+</dialog>
+
+<dialog id="dlg-export" aria-labelledby="dlg-export-h">
+  <h2 id="dlg-export-h">Export</h2>
+  <section class="export-row">
+    <h3>Still image</h3>
+    <p>A PNG of the beat on screen now.</p>
+    <div class="field field-select"><label for="still-size">Size</label><select id="still-size"></select></div>
+    <button type="button" class="btn-small primary" id="do-still">Save PNG</button>
+  </section>
+  <section class="export-row">
+    <h3>Video loop</h3>
+    <p id="video-format"></p>
+    <div class="field field-select"><label for="video-size">Size</label><select id="video-size"></select></div>
+    <button type="button" class="btn-small primary" id="do-video">Record loop</button>
+    <progress id="video-progress" max="1" value="0" hidden>0%</progress>
+  </section>
+  <section class="export-row">
+    <h3>Scene file</h3>
+    <p>A .json file with every layer, the look and your pictures. Open it here later to keep editing.</p>
+    <button type="button" class="btn-small" id="do-json">Save scene file</button>
+  </section>
+  <div class="dlg-actions"><button type="button" class="btn-small" data-close>Close</button></div>
+</dialog>
+
+<script src="js/gl.js" defer></script>
+<script src="js/clock.js" defer></script>
+<script src="js/materials.js" defer></script>
+<script src="js/elements.js" defer></script>
+<script src="js/shapes.js" defer></script>
+<script src="js/items.js" defer></script>
+<script src="js/post.js" defer></script>
+<script src="js/renderer.js" defer></script>
+<script src="js/scenes/garden-art.js" defer></script>
+<script src="js/scenes/garden.js" defer></script>
+<script src="js/editor/doc.js" defer></script>
+<script src="js/editor/library.js" defer></script>
+<script src="js/editor/fields.js" defer></script>
+<script src="js/editor/actions.js" defer></script>
+<script src="js/editor/panels.js" defer></script>
+<script src="js/editor/canvas.js" defer></script>
+<script src="js/editor/export.js" defer></script>
+<script src="js/editor/main.js" defer></script>
+</body>
+</html>

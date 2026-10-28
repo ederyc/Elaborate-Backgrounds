@@ -1,0 +1,221 @@
+/*
+  Elements for pieces people make themselves, in the editor or by hand in a
+  scene file:
+
+    shape   a cut-out: rectangle, ellipse, polygon or star, or a blob of
+            round lobes. Filled with a material (paper, felt, clay,
+            foliage, a two-color gradient, or a photo the user imported),
+            with a rough cut edge, a fiber fuzz, a "puff" that shades it
+            like a stuffed or sculpted piece, beads, and a soft shadow cast
+            down and to the right, away from the scene's top-left light.
+    image   an imported picture (a photographed cut-out, a drawing), with
+            an optional color tint.
+
+  Both are drawn in their own coordinates, centered on (0, 0), and placed
+  by the item transform (see js/items.js), so moving, scaling or rotating
+  one never changes its shader inputs.
+*/
+(function () {
+  const LB = (window.LB = window.LB || {});
+  const rgb = (h) => LB.gl.rgb(h);
+
+  const SHAPE = `
+uniform int uShape;       // 0 rectangle, 1 ellipse, 2 polygon or star, 3 blob
+uniform vec2 uHalf;       // half width, half height
+uniform vec4 uForm;       // corner roundness 0..1, sides, star depth 0..1, 0
+uniform int uMat;         // 0 paper, 1 felt, 2 clay, 3 foliage, 4 gradient, 5 photo
+uniform vec3 uCol1, uCol2;
+uniform float uGrain;     // pattern size multiplier
+uniform vec4 uLook;       // edge roughness (scene units), puff 0..1, shadow 0..1, fuzz 0..1
+uniform float uPuffW;     // how far in from the edge the puff rounds over
+uniform vec2 uShadowOff;  // shadow offset in the shape's own coordinates
+uniform vec4 uSpeck;      // scale, density, size, on
+uniform vec3 uSpeckA, uSpeckB;
+uniform sampler2D uImage;
+uniform vec4 uPhoto;      // tile width, tile height, tint amount, 0
+uniform vec3 uLobes[8];
+uniform int uLobeCount;
+uniform float uMerge;
+
+float sdShape(vec2 p) {
+  if (uShape == 0) {
+    float r = uForm.x * min(uHalf.x, uHalf.y);
+    vec2 q = abs(p) - uHalf + r;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+  }
+  if (uShape == 1) {
+    vec2 r = max(uHalf, vec2(1e-4));
+    float k0 = length(p / r), k1 = length(p / (r * r));
+    return k0 * (k0 - 1.0) / max(k1, 1e-6);
+  }
+  if (uShape == 2) {
+    // A regular polygon in unit space, squashed to the box. Star depth pulls the edge midpoints in.
+    vec2 u = p / max(uHalf, vec2(1e-4));
+    float an = PI / max(uForm.y, 3.0);
+    float a = atan(u.x, -u.y);
+    float bn = mod(a + an, 2.0 * an) - an;
+    vec2 q = length(u) * vec2(cos(bn), abs(sin(bn)));
+    vec2 A = vec2(1.0, 0.0), B = cos(an) * (1.0 - uForm.z * 0.75) * vec2(cos(an), sin(an));
+    vec2 e = B - A, w = q - A;
+    vec2 h = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+    float side = sign(e.x * w.y - e.y * w.x);
+    return -side * length(h) * min(uHalf.x, uHalf.y);
+  }
+  float d = 1e9;
+  for (int i = 0; i < uLobeCount; i++) d = smin(d, length(p - uLobes[i].xy) - uLobes[i].z, uMerge);
+  return d;
+}
+
+void main() {
+  vec2 p = scenePos();
+  float d = 1e9, ds = 1e9;
+  int passes = uLook.z > 0.0 ? 2 : 1;
+  for (int i = 0; i < passes; i++) {
+    vec2 q = i == 0 ? p : p - uShadowOff;
+    float v = sdShape(q) + wobble(q, 18.0, uLook.x);
+    if (i == 0) d = v; else ds = v;
+  }
+
+  vec2 pp = p * uGrain + uSeed * 1.7;
+  float th = 0.5;
+  vec3 c;
+  if (uMat == 0) {
+    c = uCol1 * (0.9 + 0.16 * paper(p)) * (0.95 + 0.08 * brush(pp, 30.0));
+  } else if (uMat == 1) {
+    c = uCol1 * (0.78 + 0.38 * fuzz(p)) * (0.9 + 0.18 * fbm3(pp * 24.0));
+  } else if (uMat == 2) {
+    // Thumb-pressed clay: soft dents lit from the key light, and a slight mottle in the paint.
+    vec2 q = pp * 20.0;
+    float dent = fbm3(q), dx = fbm3(q + vec2(0.3, 0.0)), dy = fbm3(q + vec2(0.0, 0.3));
+    vec3 cn = normalize(vec3((dx - dent) * 1.3, (dy - dent) * 1.3, 1.0));
+    c = lit(uCol1 * (0.94 + 0.1 * dent), cn, 1.0) / lit(vec3(1.0), vec3(0.0, 0.0, 1.0), 1.0);
+    c *= 0.98 + 0.04 * vnoise(pp * 140.0);
+  } else if (uMat == 3) {
+    c = foliage(p, uCol1 * 0.35, uCol1, min(uCol1 * 1.35 + 0.04, vec3(1.0)), uCol2, 90.0 * uGrain, th);
+    d -= (th - 0.45) * 0.8 / (90.0 * uGrain);
+  } else if (uMat == 4) {
+    c = mix(uCol1, uCol2, smoothstep(-uHalf.y, uHalf.y, p.y)) * (0.95 + 0.08 * paper(p)) * (0.97 + 0.05 * brush(pp, 6.0));
+  } else {
+    vec3 ph = texture(uImage, p / uPhoto.xy + 0.5).rgb;
+    float lum = dot(ph, vec3(0.299, 0.587, 0.114));
+    c = mix(ph, clamp(uCol1 * lum * 2.0, 0.0, 1.0), uPhoto.z);
+  }
+  if (uSpeck.w > 0.5) c = specks(p, c, uSpeck.x, uSpeck.y, uSpeckA, uSpeckB, uSpeck.z);
+
+  // Puff: shade the piece as if its edges round over, lit by the scene's key light.
+  // Screen-space derivatives give the outward direction of the edge in scene space, rotation included.
+  vec2 g = vec2(dFdx(d), dFdy(d));
+  float gLen = length(g);
+  g = gLen > 0.0 ? g / gLen : vec2(0.0);
+  float h = clamp(-d / uPuffW, 0.0, 1.0);
+  vec3 n = vec3(g * uLook.y * pow(1.0 - h, 1.5) * 2.2, 1.0);
+  c *= lit(vec3(1.0), n, 1.0) / lit(vec3(1.0), vec3(0.0, 0.0, 1.0), 1.0) * mix(1.0, 0.82 + 0.18 * h, uLook.y);
+
+  float a = clamp(0.5 - (d + (fuzz(p) - 0.5) * uLook.w * 5.0 * uPx) / (1.4 * uPx), 0.0, 1.0);
+  float blur = 0.004 + 0.012 * uLook.z;
+  float sa = uLook.z > 0.0 ? smoothstep(blur, -blur, ds) * 0.5 * min(uLook.z * 1.5, 1.0) : 0.0;
+  vec4 acc = vec4(0.0);
+  over(acc, vec3(0.07, 0.04, 0.1), sa);
+  over(acc, c, a);
+  outColor = acc;
+}`;
+
+  const IMAGE = `
+uniform sampler2D uImage;
+uniform vec2 uHalf;
+uniform vec4 uTint;   // color, amount
+void main() {
+  vec2 uv = scenePos() / (2.0 * uHalf) + 0.5;
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) { outColor = vec4(0.0); return; }
+  vec4 c = texture(uImage, uv);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  c.rgb = mix(c.rgb, clamp(uTint.rgb * lum * 2.0, 0.0, 1.0), uTint.a);
+  outColor = vec4(c.rgb * c.a, c.a);
+}`;
+
+  const SHAPES = ["rect", "ellipse", "polygon", "blob"];
+  const MATERIALS = ["paper", "felt", "clay", "foliage", "gradient", "photo"];
+
+  const half = (el) => [Math.max(el.w || 0.2, 0.002) / 2, Math.max(el.h || 0.2, 0.002) / 2];
+  function lobeBounds(el) {
+    const ls = el.lobes && el.lobes.length ? el.lobes : [[0, 0, 0.1]];
+    return [
+      Math.min(...ls.map((l) => l[0] - l[2])), Math.min(...ls.map((l) => l[1] - l[2])),
+      Math.max(...ls.map((l) => l[0] + l[2])), Math.max(...ls.map((l) => l[1] + l[2])),
+    ];
+  }
+  // The shape's outline box, before roughness, fuzz and shadow.
+  function outline(el) {
+    if (el.shape === "blob") return lobeBounds(el);
+    const [hx, hy] = half(el);
+    return [-hx, -hy, hx, hy];
+  }
+  // Rough edges are capped for small pieces, so a tiny shape keeps its outline.
+  const roughAmp = (el) => {
+    const b = outline(el);
+    return (el.rough ?? 0.4) * Math.min(0.012, 0.12 * Math.min(b[2] - b[0], b[3] - b[1]) / 2);
+  };
+  const SHADOW_OFF = [0.012, 0.018]; // at shadow 1, in scene units: down and right, away from the key light
+
+  LB.ELEMENTS.shape = {
+    glsl: SHAPE,
+    images: (el) => (el.material === "photo" && el.image ? [el.image] : []),
+    outline,
+    bbox(el) {
+      const b = outline(el);
+      const s = el.shadow || 0;
+      const m = roughAmp(el) + 0.01 + (el.material === "foliage" ? 0.02 : 0);
+      return [b[0] - m, b[1] - m, b[2] + m + (SHADOW_OFF[0] + 0.02) * s, b[3] + m + (SHADOW_OFF[1] + 0.02) * s];
+    },
+    set(gl, u, el, xf) {
+      const b = outline(el);
+      const hx = (b[2] - b[0]) / 2, hy = (b[3] - b[1]) / 2;
+      gl.uniform1i(u.uShape, Math.max(0, SHAPES.indexOf(el.shape)));
+      gl.uniform2f(u.uHalf, ...(el.shape === "blob" ? [hx, hy] : half(el)));
+      gl.uniform4f(u.uForm, el.corner ?? 0.15, el.sides ?? 5, el.shape === "polygon" ? el.star ?? 0 : 0, 0);
+      gl.uniform1i(u.uMat, Math.max(0, MATERIALS.indexOf(el.material)));
+      const [c1, c2] = el.colors || ["#8A6FB8", "#E9C6E2"];
+      gl.uniform3f(u.uCol1, ...rgb(c1));
+      gl.uniform3f(u.uCol2, ...rgb(c2 || c1));
+      gl.uniform1f(u.uGrain, el.grain ?? 1);
+      const s = el.shadow || 0;
+      gl.uniform4f(u.uLook, roughAmp(el), el.puff ?? 0.3, s, el.fuzz ?? 0.3);
+      gl.uniform1f(u.uPuffW, Math.max(0.004, Math.min(hx, hy) * 0.6));
+      // The shadow falls the same way in the scene whatever the shape's rotation, so undo the rotation here.
+      const r = (xf && xf.r) || 0, k = (xf && xf.s) || 1;
+      const ox = SHADOW_OFF[0] * s, oy = SHADOW_OFF[1] * s;
+      gl.uniform2f(u.uShadowOff, (Math.cos(r) * ox + Math.sin(r) * oy) / k, (-Math.sin(r) * ox + Math.cos(r) * oy) / k);
+      const sp = el.specks;
+      if (sp && sp.on !== false) {
+        gl.uniform4f(u.uSpeck, sp.scale ?? 150, sp.density ?? 0.2, sp.size ?? 0.3, 1);
+        gl.uniform3f(u.uSpeckA, ...rgb(sp.colors[0]));
+        gl.uniform3f(u.uSpeckB, ...rgb(sp.colors[1] || sp.colors[0]));
+      } else gl.uniform4f(u.uSpeck, 1, 0, 0, 0);
+      const tile = el.tile || 0.4;
+      const img = el.material === "photo" && LB.imageInfo ? LB.imageInfo(el.image) : null;
+      const aspect = img ? img.h / img.w : 1;
+      gl.uniform4f(u.uPhoto, tile, tile * aspect, el.tint ?? 0, 0);
+      const flat = new Float32Array(24);
+      (el.lobes || []).slice(0, 8).forEach((l, i) => flat.set(l, i * 3));
+      gl.uniform3fv(u.uLobes, flat);
+      gl.uniform1i(u.uLobeCount, Math.min(8, (el.lobes || []).length));
+      gl.uniform1f(u.uMerge, el.merge ?? 0.03);
+    },
+  };
+
+  LB.ELEMENTS.image = {
+    glsl: IMAGE,
+    images: (el) => (el.image ? [el.image] : []),
+    bbox(el) {
+      const [hx, hy] = half(el);
+      return [-hx, -hy, hx, hy];
+    },
+    set(gl, u, el) {
+      gl.uniform2f(u.uHalf, ...half(el));
+      gl.uniform4f(u.uTint, ...rgb(el.tintColor || "#FFFFFF"), el.tint ?? 0);
+    },
+  };
+
+  LB.SHAPE_KINDS = SHAPES;
+  LB.SHAPE_MATERIALS = MATERIALS;
+})();

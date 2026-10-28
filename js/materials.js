@@ -27,10 +27,18 @@ uniform float uSeed;  // varies per bake so repeated elements differ
 uniform float uFrame; // frame index for cycle animations
 uniform int uN;       // a count for shaders that loop over several things (a uniform, so the loop isn't unrolled)
 uniform int uOne;     // always 1; used as a loop bound so the compiler keeps small loops as loops
+uniform vec4 uXf;     // the item's own transform: move x, move y, scale, rotation (radians)
+uniform vec2 uXfOrigin; // the point the item scales and rotates around (its center before moving)
 out vec4 outColor;
 
 // Texture row 0 holds the top of the rect, so the compositor samples without flips.
-vec2 scenePos() { return mix(uRect.xy, uRect.zw, gl_FragCoord.xy / uRes); }
+// The result is in the item's own coordinates: the item's transform is undone here, so every
+// shader can be moved, scaled and rotated without knowing about it.
+vec2 scenePos() {
+  vec2 d = mix(uRect.xy, uRect.zw, gl_FragCoord.xy / uRes) - uXfOrigin - uXf.xy;
+  float c = cos(uXf.w), s = sin(uXf.w);
+  return uXfOrigin + vec2(c * d.x + s * d.y, -s * d.x + c * d.y) / uXf.z;
+}
 
 // ---- noise ----
 float hash12(vec2 p) {

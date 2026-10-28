@@ -2,7 +2,7 @@
 
 *This is a study of a looping backdrop made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it or with her. The study is the learning step. The original scenes I make afterwards are the actual project.*
 
-This document has two halves. The first is the look-dev analysis: what's in the scene, what colors it actually uses, how it moves and which ingredients make it look the way it does. Everything in that half comes from three screenshots, so each claim is marked with how sure I can be about it. The second half, [Building the study](#building-the-study), covers what happened when I built it: the pass-by-pass screenshots, the measured comparison with the reference, and what changed from the hypothesis.
+This document has three parts. The first is the look-dev analysis: what's in the scene, what colors it actually uses, how it moves and which ingredients make it look the way it does. Everything in that half comes from three screenshots, so each claim is marked with how sure I can be about it. The second half, [Building the study](#building-the-study), covers what happened when I built it: the pass-by-pass screenshots, the measured comparison with the reference, and what changed from the hypothesis. The last, [The recipe in plain steps](#the-recipe-in-plain-steps), is the method on its own, as you'd follow it in the editor.
 
 ## What the screenshots can and can't tell us
 
@@ -219,4 +219,17 @@ Load time took the most work. The first version took 35 seconds to start, almost
 - **No WebGL.** In Chrome with WebGL turned off, the page shows `images/still.jpg` with the caption.
 - **Lost GPU context.** The page falls back to the still image.
 - **Hidden or off screen.** In a scripted check the loop ran 60 frames in a second while visible, 0 while the tab reported hidden, 61 after it came back, and 0 with the canvas scrolled off screen.
-- **Caption contrast.** The caption text is cream (`#F3EEDD`) and tan (`#A79E8A`) on a 90% opaque near-black backing. Even with white showing through it, that's at least 12:1 and 5.3:1. The tuning panel's contrast gets checked in phase 4.
+- **Caption contrast.** The caption text is cream (`#F3EEDD`) and tan (`#A79E8A`) on a 90% opaque near-black backing. Even with white showing through it, that's at least 12:1 and 5.3:1. The tuning panel became the editor's Look panel; its checks are in the README.
+
+## The recipe in plain steps
+
+This is the whole method, separated from this one scene. Each step names the editor control that does it ([editor.html](../editor.html)), so a new scene can follow it from top to bottom.
+
+1. **Plan the planes.** Sketch the scene as 4 to 8 flat layers from back to front: sky, far hills, middle ground, framing pieces, foreground. Each becomes a layer with a depth from 0 (sky) to 1 (touching the lens). *Editor: New layer, then Depth in Properties.*
+2. **Make each piece from a shape and a material.** Silhouettes are hand-cut shapes with uneven edges, and surfaces are real materials: paper, felt, clay, clumped foliage, or a photo of your own. Nothing should have a clean vector edge. *Editor: the shape tools, then Material, Rough cut edge and Fiber fuzz.*
+3. **Light everything from one side.** One warm key light from the top left and a cool fill from the right, the same for every piece, so pieces made separately agree. Puffed pieces catch the light on their top-left edge, and shadows fall down and right. *Editor: Puff and Cast shadow.*
+4. **Push the far layers back.** Far layers fade toward the horizon color and get a little blur, so the foreground reads as closer. *Editor: Haze and Soften with distance, on each layer.*
+5. **Move on the beat, not smoothly.** Poses change 12, 8 or 6 times a second and hold in between. Flowers sway from their stems, clouds drift, and anything cycling swaps whole frames. Every motion repeats a whole number of times in 6 seconds, so the loop is seamless. *Editor: Motion on each layer, Beat rate in Look.*
+6. **Let it boil.** Every beat, each layer wobbles by a pixel or two, cycling through three versions, like a drawing redrawn three times. Nearer layers boil more. *Editor: Boil on each layer, Boil for the whole scene in Look.*
+7. **Grade it last, and grade it hard.** The grade does more than any other step: lifted blacks, split toning, a push in warmth and saturation (or the opposite for night). *Editor: a preset in Look, then Grade.*
+8. **Add the haze of a lens.** Mist over everything lifts the darks and haloes every edge, and glow lights the highlights. Halation, color fringing, a tinted vignette and grain are all subtle. Turn each one off once to check it earns its place. *Editor: the passes in Look, each with its own switch.*
