@@ -1,203 +1,262 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="studio">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Backdrop Editor</title>
-<meta name="description" content="Make looping stop-motion wallpapers in the browser: layers at depths, handmade-looking shapes and materials, swaying flowers, boil and a soft film look. Export stills and video loops.">
+<meta name="description" content="Make looping stop-motion wallpapers in the browser: layers at depths, handmade-looking shapes, 3D clay pieces, pose-by-pose animation and a soft film look. Export stills, exact video loops and live wallpapers.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23000000'/%3E%3Ctext x='16' y='23' font-family='Georgia, serif' font-size='19' font-weight='700' fill='%23D9A441' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/tokens.css">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,500..700,100,1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF7A59'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23FFC94A'/%3E%3C/svg%3E">
+<script>
+  // The theme is set before anything draws, so the page never flashes the wrong colors.
+  try { const t = JSON.parse(localStorage.getItem("eb:theme")); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 <link rel="stylesheet" href="css/editor.css">
 </head>
 <body>
 <a class="skip" href="#viewport">Skip to the canvas</a>
 
+<!-- ===================== top bar ===================== -->
 <header class="topbar">
-  <h1 class="sr-only">Backdrop Editor</h1>
-  <div class="brand">
-    <a class="home" href="index.html" title="Back to the garden study"><span aria-hidden="true">E</span><span class="sr-only">Back to the garden study</span></a>
-    <label class="sr-only" for="doc-title">Scene name</label>
-    <input id="doc-title" class="title-input" type="text" maxlength="80" value="Untitled scene" autocomplete="off" spellcheck="false">
-    <span class="save-state" id="save-state" aria-live="polite"></span>
+  <h1 class="sr">Backdrop Editor</h1>
+  <a class="logo" href="index.html" data-tip="Back to the garden study"><span class="logo-sun" aria-hidden="true"></span><span class="sr">Back to the garden study</span></a>
+  <div class="doc">
+    <label class="sr" for="doc-title">Scene name</label>
+    <input id="doc-title" class="doc-title" type="text" maxlength="80" value="Untitled scene" autocomplete="off" spellcheck="false">
+    <span class="save-chip" id="save-state" aria-live="polite"><span class="save-dot" aria-hidden="true"></span><span class="save-text">Not saved yet</span></span>
   </div>
-
-  <div class="toolbar">
-    <div class="group" role="group" aria-label="File">
-      <button type="button" class="tb-btn" id="btn-new">New</button>
-      <button type="button" class="tb-btn" id="btn-open">Open</button>
-      <button type="button" class="tb-btn" id="btn-save" title="Save the scene as a file (Ctrl+S)">Save file</button>
-      <input type="file" id="file-open" accept=".json,application/json" hidden>
-    </div>
-    <div class="group" role="group" aria-label="Undo and redo">
-      <button type="button" class="icon-btn" id="btn-undo" aria-label="Undo" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
-      <button type="button" class="icon-btn" id="btn-redo" aria-label="Redo" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
-    </div>
-    <div class="group tools" role="group" aria-label="Tools">
-      <button type="button" class="icon-btn" data-tool="select" aria-pressed="true" title="Select and move (V)" aria-label="Select and move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
-      <button type="button" class="icon-btn" data-tool="rect" aria-pressed="false" title="Draw a rectangle (R)" aria-label="Draw a rectangle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="2"/></svg></button>
-      <button type="button" class="icon-btn" data-tool="ellipse" aria-pressed="false" title="Draw an ellipse (E)" aria-label="Draw an ellipse"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg></button>
-      <button type="button" class="icon-btn" data-tool="triangle" aria-pressed="false" title="Draw a triangle (T)" aria-label="Draw a triangle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/></svg></button>
-      <button type="button" class="icon-btn" data-tool="star" aria-pressed="false" title="Draw a star (S)" aria-label="Draw a star"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>
-      <button type="button" class="icon-btn" data-tool="cloud" aria-pressed="false" title="Draw a cloud (C)" aria-label="Draw a cloud"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6-1A4.5 4.5 0 0 1 17.5 18z"/></svg></button>
-      <button type="button" class="icon-btn" data-tool="pen" aria-pressed="false" title="Draw your own outline, point by point (P)" aria-label="Draw your own outline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l3-9 6-6 6 6-6 6z"/><circle cx="12.5" cy="11.5" r="1.6"/><path d="M4 20l6.5-6.5"/></svg></button>
-    </div>
-    <div class="group" role="group" aria-label="Preview shape">
-      <button type="button" class="tb-btn" data-preview="scene" aria-pressed="true" title="The whole scene, in its own shape">Scene</button>
-      <button type="button" class="tb-btn" data-preview="desktop" aria-pressed="false" title="What a 16:9 screen shows">Desktop</button>
-      <button type="button" class="tb-btn" data-preview="phone" aria-pressed="false">Phone</button>
-    </div>
-    <button type="button" class="tb-btn primary" id="btn-export">Export</button>
+  <nav class="menubar" aria-label="Menus">
+    <button type="button" class="menu-btn" data-menu="file" aria-haspopup="menu" aria-expanded="false">File</button>
+    <button type="button" class="menu-btn" data-menu="edit" aria-haspopup="menu" aria-expanded="false">Edit</button>
+    <button type="button" class="menu-btn" data-menu="view" aria-haspopup="menu" aria-expanded="false">View</button>
+    <button type="button" class="menu-btn" data-menu="help" aria-haspopup="menu" aria-expanded="false">Help</button>
+  </nav>
+  <div class="bar-group" role="group" aria-label="Undo and redo">
+    <button type="button" class="ibtn" id="btn-undo" aria-label="Undo" data-tip="Undo" data-keys="Ctrl Z" data-icon="undo" disabled></button>
+    <button type="button" class="ibtn" id="btn-redo" aria-label="Redo" data-tip="Redo" data-keys="Ctrl Shift Z" data-icon="redo" disabled></button>
   </div>
+  <div class="bar-spacer"></div>
+  <button type="button" class="ibtn" id="btn-theme" aria-label="Switch to the light theme" data-tip="Light or dark" data-icon="sun"></button>
+  <button type="button" class="ibtn" id="btn-help" aria-label="Keyboard shortcuts" data-tip="Keyboard shortcuts" data-keys="?" data-icon="keyboard"></button>
+  <button type="button" class="btn btn-ghost" id="btn-present" data-tip="See it full screen, as a wallpaper" data-keys="F"><span class="ic" data-icon="present"></span><span>Present</span></button>
+  <button type="button" class="btn btn-primary" id="btn-export" data-tip="Images, video loops, live wallpapers" data-keys="Ctrl E"><span class="ic" data-icon="export"></span><span>Export</span></button>
 </header>
 
 <main class="workspace">
-  <aside class="panel panel-left" aria-label="Layers and store">
-    <section class="layers" aria-labelledby="layers-h">
-      <div class="panel-head">
-        <h2 id="layers-h">Layers</h2>
-        <p class="panel-hint">Front at the top</p>
-      </div>
-      <ul id="layer-list" class="layer-list"></ul>
-      <div class="panel-actions" role="group" aria-label="Layer actions">
-        <button type="button" class="btn-small" id="btn-add-layer">New layer</button>
-        <button type="button" class="btn-small" id="btn-dup" title="Duplicate (Ctrl+D)">Duplicate</button>
-        <button type="button" class="btn-small" id="btn-fwd" title="Bring forward (])">Forward</button>
-        <button type="button" class="btn-small" id="btn-back" title="Send backward ([)">Backward</button>
-        <button type="button" class="btn-small danger" id="btn-del" title="Delete (Delete key on the canvas)">Delete</button>
-      </div>
-    </section>
-    <section class="store" aria-labelledby="store-h">
-      <div class="panel-head">
-        <h2 id="store-h">Store</h2>
-        <button type="button" class="btn-small" id="btn-import">Import picture</button>
-        <input type="file" id="file-image" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
-      </div>
-      <div class="store-cats" id="store-cats" role="group" aria-label="Store categories"></div>
-      <div class="store-grid" id="store-grid"></div>
-    </section>
-  </aside>
+  <!-- ===================== tool rail ===================== -->
+  <nav class="rail" aria-label="Tools">
+    <button type="button" class="rail-add" id="btn-add" aria-expanded="false" aria-controls="store" data-tip="Add pieces from the store" data-keys="A" data-tip-side="right">
+      <span class="ic" data-icon="add"></span><span class="sr">Add pieces</span>
+    </button>
+    <div class="rail-tools" role="group" aria-label="Tools">
+      <span class="rail-pill" aria-hidden="true"></span>
+      <button type="button" class="tool" data-tool="select" aria-pressed="true" aria-label="Select and move" data-tip="Select and move" data-keys="V" data-tip-side="right"><span class="ic" data-icon="select"></span></button>
+      <button type="button" class="tool" data-tool="hand" aria-pressed="false" aria-label="Pan the view" data-tip="Pan (or hold Space)" data-keys="H" data-tip-side="right"><span class="ic" data-icon="hand"></span></button>
+      <span class="rail-sep" aria-hidden="true"></span>
+      <button type="button" class="tool" data-tool="rect" aria-pressed="false" aria-label="Draw a rectangle" data-tip="Rectangle" data-keys="R" data-tip-side="right"><span class="ic" data-icon="rect"></span></button>
+      <button type="button" class="tool" data-tool="ellipse" aria-pressed="false" aria-label="Draw an ellipse" data-tip="Ellipse" data-keys="E" data-tip-side="right"><span class="ic" data-icon="ellipse"></span></button>
+      <button type="button" class="tool" data-tool="triangle" aria-pressed="false" aria-label="Draw a triangle" data-tip="Triangle" data-keys="T" data-tip-side="right"><span class="ic" data-icon="triangle"></span></button>
+      <button type="button" class="tool" data-tool="star" aria-pressed="false" aria-label="Draw a star" data-tip="Star" data-keys="S" data-tip-side="right"><span class="ic" data-icon="star"></span></button>
+      <button type="button" class="tool" data-tool="cloud" aria-pressed="false" aria-label="Draw a cloud" data-tip="Cloud" data-keys="C" data-tip-side="right"><span class="ic" data-icon="cloud"></span></button>
+      <button type="button" class="tool" data-tool="pen" aria-pressed="false" aria-label="Draw your own outline" data-tip="Your own outline, point by point" data-keys="P" data-tip-side="right"><span class="ic" data-icon="pen"></span></button>
+    </div>
+  </nav>
 
-  <section class="stage" aria-label="Scene">
-    <div class="stage-inner">
-      <div id="viewport" class="viewport is-loading" tabindex="0" role="application" aria-roledescription="scene canvas" aria-label="Scene canvas" aria-describedby="viewport-help">
-        <canvas id="scene" aria-hidden="true"></canvas>
-        <svg id="overlay" class="overlay" aria-hidden="true"></svg>
-        <p class="loading" id="loading">Building the scene…</p>
-      </div>
+  <!-- ===================== store drawer ===================== -->
+  <section class="store" id="store" aria-labelledby="store-h" hidden>
+    <div class="store-head">
+      <h2 id="store-h" class="panel-title">Add</h2>
+      <span class="panel-hint">click, or drag onto the canvas</span>
+      <button type="button" class="ibtn ibtn-sm" id="btn-store-close" aria-label="Close the store" data-tip="Close" data-keys="Esc" data-icon="close"></button>
     </div>
-    <p id="viewport-help" class="sr-only">Click a piece to select it, then drag to move it. With the canvas focused, arrow keys move the selection, Shift with an arrow moves it further, Delete removes it and Escape deselects. The Layers list and the Properties panel do everything the mouse does.</p>
-    <div class="transport">
-      <button type="button" class="icon-btn play" id="btn-play" data-playing="false" aria-label="Play" title="Play (Space)">
-        <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>
-        <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
-      </button>
-      <label class="sr-only" for="scrub">Beat in the loop</label>
-      <input type="range" id="scrub" min="0" max="71" step="1" value="0">
-      <output id="beat-readout" for="scrub">Beat 1 of 72</output>
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+    <div class="search">
+      <span class="ic" data-icon="search"></span>
+      <label class="sr" for="store-search">Search the store</label>
+      <input id="store-search" type="search" placeholder="Search pieces" autocomplete="off">
     </div>
-    <div class="pose-strip" id="pose-strip" hidden>
-      <span class="pose-label" id="pose-label">Poses</span>
-      <div class="pose-buttons" id="pose-buttons" role="group" aria-labelledby="pose-label"></div>
-      <div class="group" role="group" aria-label="Moving a piece changes">
-        <button type="button" class="tb-btn" data-pose-mode="all" aria-pressed="true" title="Moving a piece moves it in every pose">All poses</button>
-        <button type="button" class="tb-btn" data-pose-mode="pose" aria-pressed="false" title="Moving a piece changes only the pose on screen">This pose only</button>
-      </div>
-      <label class="pose-check"><input type="checkbox" id="onion"> Onion skin</label>
-      <button type="button" class="btn-small" id="btn-copy-pose" title="Make this pose match the one before it">Copy previous pose</button>
+    <div class="store-cats" id="store-cats" role="group" aria-label="Store groups"></div>
+    <div class="store-grid" id="store-grid"></div>
+    <div class="store-foot">
+      <button type="button" class="btn btn-sm" id="btn-import"><span class="ic" data-icon="image"></span><span>Import picture</span></button>
+      <input type="file" id="file-image" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
     </div>
   </section>
 
-  <aside class="panel panel-right" aria-label="Properties and look">
-    <div class="tabs" role="tablist" aria-label="Side panel">
-      <button type="button" role="tab" id="tab-props" aria-controls="pane-props" aria-selected="true">Properties</button>
-      <button type="button" role="tab" id="tab-look" aria-controls="pane-look" aria-selected="false" tabindex="-1">Look</button>
+  <!-- ===================== layers ===================== -->
+  <section class="panel panel-layers" aria-labelledby="layers-h">
+    <div class="panel-head">
+      <h2 id="layers-h" class="panel-title">Layers</h2>
+      <span class="panel-hint">front at the top</span>
+      <button type="button" class="ibtn ibtn-sm" id="btn-depthview" aria-pressed="true" aria-label="Show the depth view" data-tip="Depth view" data-icon="depth"></button>
     </div>
-    <div id="pane-props" class="pane" role="tabpanel" aria-labelledby="tab-props" tabindex="0"></div>
+    <div class="depthview" id="depthview"></div>
+    <ul id="layer-list" class="layer-list" aria-label="Layers, front to back"></ul>
+    <div class="panel-foot" role="group" aria-label="Layer actions">
+      <button type="button" class="ibtn" id="btn-add-layer" aria-label="New layer" data-tip="New layer" data-tip-side="top" data-icon="add"></button>
+      <button type="button" class="ibtn" id="btn-dup" aria-label="Duplicate" data-tip="Duplicate" data-keys="Ctrl D" data-tip-side="top" data-icon="copy"></button>
+      <button type="button" class="ibtn" id="btn-fwd" aria-label="Bring forward" data-tip="Bring forward" data-keys="]" data-tip-side="top" data-icon="up"></button>
+      <button type="button" class="ibtn" id="btn-back" aria-label="Send backward" data-tip="Send backward" data-keys="[" data-tip-side="top" data-icon="down"></button>
+      <span class="bar-spacer"></span>
+      <button type="button" class="ibtn ibtn-danger" id="btn-del" aria-label="Delete" data-tip="Delete" data-keys="Del" data-tip-side="top" data-icon="trash"></button>
+    </div>
+  </section>
+
+  <!-- ===================== stage ===================== -->
+  <section class="stage" aria-label="Scene">
+    <div class="stage-inner" id="stage-inner">
+      <div id="viewport" class="viewport is-loading" tabindex="0" role="application" aria-roledescription="scene canvas" aria-label="Scene canvas" aria-describedby="viewport-help">
+        <canvas id="scene" aria-hidden="true"></canvas>
+        <svg id="overlay" class="overlay" aria-hidden="true"></svg>
+        <div class="loader" id="loading"><span></span><span></span><span></span><p>Building the scene</p></div>
+      </div>
+      <div class="zoombar" role="group" aria-label="Zoom">
+        <button type="button" class="ibtn ibtn-sm" id="btn-zoom-out" aria-label="Zoom out" data-tip="Zoom out" data-keys="Ctrl −" data-tip-side="top" data-icon="zoomOut"></button>
+        <button type="button" class="zoom-pct" id="btn-zoom-pct" aria-haspopup="menu" aria-expanded="false" data-tip="Zoom presets" data-tip-side="top">Fit</button>
+        <button type="button" class="ibtn ibtn-sm" id="btn-zoom-in" aria-label="Zoom in" data-tip="Zoom in" data-keys="Ctrl +" data-tip-side="top" data-icon="zoomIn"></button>
+        <span class="zoom-sep" aria-hidden="true"></span>
+        <button type="button" class="ibtn ibtn-sm" id="btn-zoom-fit" aria-label="Fit the scene" data-tip="Fit" data-keys="Ctrl 0" data-tip-side="top" data-icon="fit"></button>
+        <button type="button" class="ibtn ibtn-sm" id="btn-guides" aria-pressed="false" aria-label="Screen guides" data-tip="Show what a phone and a desktop crop" data-keys="G" data-tip-side="top" data-icon="guides"></button>
+        <button type="button" class="ibtn ibtn-sm" id="btn-snap" aria-pressed="true" aria-label="Snapping" data-tip="Snap to the frame and other pieces (hold Alt to skip)" data-tip-side="top" data-icon="magnet"></button>
+      </div>
+      <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    </div>
+    <p id="viewport-help" class="sr">Click a piece to select it, then drag to move it. With the canvas focused, arrow keys move the selection, Shift with an arrow moves it further, Delete removes it and Escape deselects. Control plus the mouse wheel zooms; the wheel, or Space and drag, pans. The Layers list and the inspector do everything the mouse does.</p>
+
+    <!-- ===================== timeline ===================== -->
+    <div class="timeline">
+      <button type="button" class="play" id="btn-play" data-playing="false" aria-label="Play" data-tip="Play or pause" data-keys="Space" data-tip-side="top">
+        <span class="ic ic-play" data-icon="play"></span><span class="ic ic-pause" data-icon="pause"></span>
+      </button>
+      <div class="beats">
+        <div class="beats-top">
+          <span class="beat-readout" id="beat-readout">Beat 1 of 72</span>
+          <span class="beats-hint">6-second loop</span>
+          <div class="seg seg-mini" role="radiogroup" aria-label="Beats per second" id="fps-seg">
+            <button type="button" class="seg-btn" role="radio" data-fps="12" aria-checked="true" data-tip="12 beats a second (on 2s)">12</button>
+            <button type="button" class="seg-btn" role="radio" data-fps="8" aria-checked="false" data-tip="8 beats a second (on 3s)">8</button>
+            <button type="button" class="seg-btn" role="radio" data-fps="6" aria-checked="false" data-tip="6 beats a second (on 4s)">6</button>
+          </div>
+        </div>
+        <div class="track" id="track">
+          <div class="track-ticks" id="track-ticks" aria-hidden="true"></div>
+          <div class="track-fill" id="track-fill" aria-hidden="true"></div>
+          <label class="sr" for="scrub">Beat in the loop</label>
+          <input type="range" id="scrub" min="0" max="71" step="1" value="0">
+        </div>
+      </div>
+      <div class="poses" id="pose-strip" hidden>
+        <span class="poses-label" id="pose-label"><span class="ic" data-icon="film"></span><span class="poses-name">Poses</span></span>
+        <div class="pose-buttons" id="pose-buttons" role="group" aria-labelledby="pose-label"></div>
+        <div class="seg seg-mini" role="radiogroup" aria-label="Moving a piece changes">
+          <button type="button" class="seg-btn" role="radio" data-pose-mode="all" aria-checked="true" data-tip="Moving a piece moves it in every pose">All poses</button>
+          <button type="button" class="seg-btn" role="radio" data-pose-mode="pose" aria-checked="false" data-tip="Moving a piece changes only this pose">This pose</button>
+        </div>
+        <button type="button" class="ibtn ibtn-sm" id="onion" aria-pressed="false" aria-label="Onion skin" data-tip="Onion skin: see the last pose faintly" data-tip-side="top" data-icon="onion"></button>
+        <button type="button" class="ibtn ibtn-sm" id="btn-copy-pose" aria-label="Copy previous pose" data-tip="Copy the previous pose here" data-tip-side="top" data-icon="copy"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== inspector ===================== -->
+  <aside class="panel panel-inspector" aria-label="Inspector">
+    <div class="tabs" role="tablist" aria-label="Inspector">
+      <button type="button" role="tab" id="tab-piece" aria-controls="pane-piece" aria-selected="true"><span class="ic" data-icon="shapes"></span><span>Piece</span></button>
+      <button type="button" role="tab" id="tab-layer" aria-controls="pane-layer" aria-selected="false" tabindex="-1"><span class="ic" data-icon="layers"></span><span>Layer</span></button>
+      <button type="button" role="tab" id="tab-look" aria-controls="pane-look" aria-selected="false" tabindex="-1"><span class="ic" data-icon="wand"></span><span>Look</span></button>
+      <span class="tab-ink" aria-hidden="true"></span>
+    </div>
+    <div id="pane-piece" class="pane" role="tabpanel" aria-labelledby="tab-piece" tabindex="0"></div>
+    <div id="pane-layer" class="pane" role="tabpanel" aria-labelledby="tab-layer" tabindex="0" hidden></div>
     <div id="pane-look" class="pane" role="tabpanel" aria-labelledby="tab-look" tabindex="0" hidden></div>
   </aside>
 </main>
 
-<dialog id="dlg-new" aria-labelledby="dlg-new-h">
-  <h2 id="dlg-new-h">New scene</h2>
-  <p>This replaces the scene you have open. If you want to keep it, use Save file first.</p>
-  <div class="template-list">
-    <button type="button" class="template" data-template="beach">
-      <span class="t-name">Beach day</span>
-      <span class="t-note">The sample scene: a girl digging, waves, palms, gulls and a boardwalk crowd, all made from the editor's pieces.</span>
+<!-- ===================== dialogs ===================== -->
+<dialog id="dlg-new" class="dlg" aria-labelledby="dlg-new-h">
+  <div class="dlg-head"><h2 id="dlg-new-h">New scene</h2><button type="button" class="ibtn" data-close aria-label="Close" data-icon="close"></button></div>
+  <p class="dlg-note">This replaces the scene you have open. If you want to keep it, use File, Save the scene file first.</p>
+  <div class="templates">
+    <button type="button" class="tcard" data-template="beach">
+      <img src="docs/images/beach-day.jpg" alt="" loading="lazy" decoding="async">
+      <span class="tcard-name">Beach day</span>
+      <span class="tcard-note">The sample: a girl digging, waves, palms, gulls, a duck and a crab.</span>
     </button>
-    <div class="template template-blank">
-      <span class="t-name" id="blank-h">Blank backdrop</span>
-      <span class="t-note">A painted wash to build on, in the shape of the screen it's for.</span>
-      <div class="blank-shapes" role="group" aria-labelledby="blank-h">
-        <button type="button" class="btn-small" data-template="blank" data-aspect="1.7778">Desktop 16:9</button>
-        <button type="button" class="btn-small" data-template="blank" data-aspect="2.3333">Ultrawide 21:9</button>
-        <button type="button" class="btn-small" data-template="blank" data-aspect="1.6">Laptop 16:10</button>
-        <button type="button" class="btn-small" data-template="blank" data-aspect="1">Square</button>
-        <button type="button" class="btn-small" data-template="blank" data-aspect="0.4615">Phone (tall)</button>
-      </div>
-    </div>
-    <button type="button" class="template" data-template="study">
-      <span class="t-name">Garden study</span>
-      <span class="t-note">The study of a stop-motion backdrop by Tamara, with every piece editable.</span>
+    <button type="button" class="tcard" data-template="study">
+      <img src="images/still.jpg" alt="" loading="lazy" decoding="async">
+      <span class="tcard-name">Garden study</span>
+      <span class="tcard-note">The study of a stop-motion backdrop by Tamara, every piece editable.</span>
     </button>
   </div>
-  <div class="dlg-actions"><button type="button" class="btn-small" data-close>Cancel</button></div>
+  <h3 class="dlg-sub" id="blank-h">Or start blank, in the shape of your screen</h3>
+  <div class="shapes" role="group" aria-labelledby="blank-h">
+    <button type="button" class="shape-card" data-template="blank" data-aspect="1.7778"><span class="shape-pic" style="aspect-ratio:16/9"></span><span>Desktop</span><small>16:9</small></button>
+    <button type="button" class="shape-card" data-template="blank" data-aspect="2.3333"><span class="shape-pic" style="aspect-ratio:21/9"></span><span>Ultrawide</span><small>21:9</small></button>
+    <button type="button" class="shape-card" data-template="blank" data-aspect="1.6"><span class="shape-pic" style="aspect-ratio:16/10"></span><span>Laptop</span><small>16:10</small></button>
+    <button type="button" class="shape-card" data-template="blank" data-aspect="1"><span class="shape-pic" style="aspect-ratio:1"></span><span>Square</span><small>1:1</small></button>
+    <button type="button" class="shape-card" data-template="blank" data-aspect="0.4615"><span class="shape-pic" style="aspect-ratio:9/19.5"></span><span>Phone</span><small>tall</small></button>
+  </div>
 </dialog>
 
-<dialog id="dlg-pack" aria-labelledby="dlg-pack-h">
-  <h2 id="dlg-pack-h">Save My pieces as a pack</h2>
-  <p>A pack is one file with your pieces and their pictures. Anyone can install it from the store.</p>
-  <form id="pack-form" method="dialog">
-    <div class="field field-text"><label for="pack-name">Pack name</label><input id="pack-name" type="text" maxlength="60" required value="My pieces"></div>
-    <div class="field field-text"><label for="pack-author">Your name, for the credit</label><input id="pack-author" type="text" maxlength="60" autocomplete="name"></div>
-    <div class="field field-select"><label for="pack-license">How others may use it</label>
-      <select id="pack-license">
+<dialog id="dlg-export" class="dlg dlg-wide" aria-labelledby="dlg-export-h">
+  <div class="dlg-head"><h2 id="dlg-export-h">Export</h2><button type="button" class="ibtn" data-close aria-label="Close" data-icon="close"></button></div>
+  <div class="export-grid">
+    <section class="xcard" style="--card: var(--sun)">
+      <div class="xcard-head"><span class="xcard-ic"><span class="ic" data-icon="image"></span></span><h3>Still image</h3></div>
+      <p>A PNG of the beat on screen now.</p>
+      <div class="f f-select"><label for="still-size" class="f-label">Size</label><span class="f-sel-wrap"><select id="still-size" class="f-sel"></select><span class="ic f-sel-chev" data-icon="chevronDown"></span></span></div>
+      <button type="button" class="btn btn-primary" id="do-still"><span class="ic" data-icon="download"></span><span>Save PNG</span></button>
+    </section>
+    <section class="xcard" style="--card: var(--coral)">
+      <div class="xcard-head"><span class="xcard-ic"><span class="ic" data-icon="film"></span></span><h3>Video loop</h3></div>
+      <p id="video-format"></p>
+      <div class="f f-select"><label for="video-size" class="f-label">Size</label><span class="f-sel-wrap"><select id="video-size" class="f-sel"></select><span class="ic f-sel-chev" data-icon="chevronDown"></span></span></div>
+      <div class="f f-select"><label for="video-loops" class="f-label">Length</label><span class="f-sel-wrap">
+        <select id="video-loops" class="f-sel"><option value="1">One loop, 6 seconds</option><option value="2">2 loops, 12 seconds</option><option value="5">5 loops, 30 seconds</option></select><span class="ic f-sel-chev" data-icon="chevronDown"></span></span></div>
+      <button type="button" class="btn btn-primary" id="do-video"><span class="ic" data-icon="download"></span><span>Save video</span></button>
+      <progress id="video-progress" class="progress" max="1" value="0" hidden>0%</progress>
+    </section>
+    <section class="xcard" style="--card: var(--teal)">
+      <div class="xcard-head"><span class="xcard-ic"><span class="ic" data-icon="present"></span></span><h3>Live wallpaper</h3></div>
+      <p>One HTML file that plays the scene full screen, offline. For apps that use a web page as a wallpaper, or as a page background.</p>
+      <button type="button" class="btn" id="do-live"><span class="ic" data-icon="download"></span><span>Save live wallpaper</span></button>
+    </section>
+    <section class="xcard" style="--card: var(--lilac)">
+      <div class="xcard-head"><span class="xcard-ic"><span class="ic" data-icon="file"></span></span><h3>Scene file</h3></div>
+      <p>A .json file with every layer, the look and your pictures. Open it here later to keep editing.</p>
+      <button type="button" class="btn" id="do-json"><span class="ic" data-icon="save"></span><span>Save scene file</span></button>
+    </section>
+  </div>
+</dialog>
+
+<dialog id="dlg-pack" class="dlg" aria-labelledby="dlg-pack-h">
+  <div class="dlg-head"><h2 id="dlg-pack-h">Save My pieces as a pack</h2><button type="button" class="ibtn" data-close aria-label="Close" data-icon="close"></button></div>
+  <p class="dlg-note">A pack is one file with your pieces and their pictures. Anyone can install it from the store.</p>
+  <form id="pack-form" method="dialog" class="pack-form">
+    <div class="f f-text"><label for="pack-name" class="f-label">Pack name</label><input id="pack-name" class="f-textin" type="text" maxlength="60" required value="My pieces"></div>
+    <div class="f f-text"><label for="pack-author" class="f-label">Your name, for the credit</label><input id="pack-author" class="f-textin" type="text" maxlength="60" autocomplete="name"></div>
+    <div class="f f-select"><label for="pack-license" class="f-label">How others may use it</label><span class="f-sel-wrap">
+      <select id="pack-license" class="f-sel">
         <option>Free to use; please credit me</option>
         <option>CC BY 4.0 (use and change, with credit)</option>
         <option>CC0 (no rights reserved)</option>
         <option>Personal use only</option>
-      </select>
+      </select><span class="ic f-sel-chev" data-icon="chevronDown"></span></span>
     </div>
-    <div class="dlg-actions"><button type="button" class="btn-small" data-close>Cancel</button><button type="submit" class="btn-small primary">Save pack</button></div>
+    <div class="dlg-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save pack</button></div>
   </form>
 </dialog>
 <input type="file" id="file-pack" accept=".json,application/json" hidden>
+<input type="file" id="file-open" accept=".json,application/json" hidden>
 
-<dialog id="dlg-export" aria-labelledby="dlg-export-h">
-  <h2 id="dlg-export-h">Export</h2>
-  <section class="export-row">
-    <h3>Still image</h3>
-    <p>A PNG of the beat on screen now.</p>
-    <div class="field field-select"><label for="still-size">Size</label><select id="still-size"></select></div>
-    <button type="button" class="btn-small primary" id="do-still">Save PNG</button>
-  </section>
-  <section class="export-row">
-    <h3>Video loop</h3>
-    <p id="video-format"></p>
-    <div class="field field-select"><label for="video-size">Size</label><select id="video-size"></select></div>
-    <div class="field field-select"><label for="video-loops">Length</label>
-      <select id="video-loops"><option value="1">One loop, 6 seconds</option><option value="2">2 loops, 12 seconds</option><option value="5">5 loops, 30 seconds</option></select>
-      <p class="field-hint">For players that pause between repeats, a longer file hides the jump.</p>
-    </div>
-    <button type="button" class="btn-small primary" id="do-video">Save video</button>
-    <progress id="video-progress" max="1" value="0" hidden>0%</progress>
-  </section>
-  <section class="export-row">
-    <h3>Live wallpaper</h3>
-    <p>One HTML file that plays the scene full screen, with nothing else on it. Use it with an app that shows a web page as a desktop wallpaper, or as a page background. It works offline.</p>
-    <button type="button" class="btn-small" id="do-live">Save live wallpaper</button>
-  </section>
-  <section class="export-row">
-    <h3>Scene file</h3>
-    <p>A .json file with every layer, the look and your pictures. Open it here later to keep editing.</p>
-    <button type="button" class="btn-small" id="do-json">Save scene file</button>
-  </section>
-  <div class="dlg-actions"><button type="button" class="btn-small" data-close>Close</button></div>
+<dialog id="dlg-keys" class="dlg dlg-wide" aria-labelledby="dlg-keys-h">
+  <div class="dlg-head"><h2 id="dlg-keys-h">Keyboard shortcuts</h2><button type="button" class="ibtn" data-close aria-label="Close" data-icon="close"></button></div>
+  <div class="keys" id="keys-list"></div>
 </dialog>
+
+<div class="present-bar" id="present-bar" hidden><span>Press <kbd>Esc</kbd> to come back</span></div>
+<div class="tour" id="tour" hidden></div>
 
 <script src="js/gl.js" defer></script>
 <script src="js/clock.js" defer></script>
@@ -210,11 +269,14 @@
 <script src="js/renderer.js" defer></script>
 <script src="js/scenes/garden-art.js" defer></script>
 <script src="js/scenes/garden.js" defer></script>
-<script src="js/scenes/beach.js" defer></script>
+<script src="js/editor/ui.js" defer></script>
 <script src="js/editor/doc.js" defer></script>
 <script src="js/editor/library.js" defer></script>
+<script src="js/scenes/beach.js" defer></script>
 <script src="js/editor/fields.js" defer></script>
 <script src="js/editor/actions.js" defer></script>
+<script src="js/editor/layers.js" defer></script>
+<script src="js/editor/store.js" defer></script>
 <script src="js/editor/panels.js" defer></script>
 <script src="js/editor/canvas.js" defer></script>
 <script src="js/editor/mp4.js" defer></script>

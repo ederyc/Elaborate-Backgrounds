@@ -718,6 +718,16 @@
     ];
   }
 
+  // Several layers become one, back to front, each keeping its pieces together as a group.
+  function combine(layers, ids, into) {
+    const parts = ids.map((id) => layers.find((l) => l.id === id));
+    const at = layers.indexOf(parts[0]);
+    const dst = { ...into, paint: [] };
+    for (const src of parts) LB.DOC.mergeLayers(dst, src, { front: true });
+    for (const src of parts) layers.splice(layers.indexOf(src), 1);
+    layers.splice(at, 0, dst);
+  }
+
   // ======================= the scene =======================
   function build() {
     seed = 7;
@@ -730,6 +740,13 @@
       rubberDuck(), crab(),
       bucketAndCastle(), girl(),
     ];
+    // Objects that share a depth and a pose timing share a layer, each as its own group, the way
+    // they would in a drawing program. Palms, gulls and clouds keep their own layers: each one
+    // sways, drifts or flies on its own, and motion belongs to a layer.
+    combine(layers, ["crab", "bucket", "girl"], { id: "girl", name: "Girl at her sandcastle", depth: 0.82, boil: 1.5, seed: 403, cycle: { frames: 12, rate: 6 } });
+    combine(layers, ["crowd", "chatter"], { id: "crowd", name: "Boardwalk crowd", depth: 0.2, boil: 1.2, seed: 116, cycle: { frames: 4, rate: 4 } });
+    combine(layers, ["camp-a-shade", "sunbather", "camp-a"], { id: "camp-a", name: "Red umbrella camp", depth: 0.42, boil: 1.2, seed: 92, cycle: { frames: 4, rate: 4 } });
+    combine(layers, ["far-umbrellas", "camp-b"], { id: "camp-b", name: "Umbrellas up the beach", depth: 0.24, boil: 1, haze: 0.03, seed: 149 });
     return {
       format: "elaborate-backgrounds/scene", version: 1,
       title: "Beach day",

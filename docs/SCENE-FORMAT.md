@@ -67,6 +67,7 @@ Layers are listed back to front. Three kinds:
 | `anim` | `drift` (`amp: [x, y]`), `sway` (`amp` in radians, `speed` in whole sways per loop, `phase`), `travel` (below), or `cycle` (`frames`, `rate`; bespoke art only) |
 | `cycle` | A pose cycle: `{ "frames": 12, "rate": 6 }` bakes 12 textures and steps through them 6 times a second. `frames / rate` has to divide the 6-second loop evenly, or the file is rejected with a message. Pieces with `poses` move between them. |
 | `pivot` | Where a paint layer sways from: `"base"` (default) or `"center"` |
+| `groups` | Optional. Named groups of this layer's pieces: `{ "group-ab12c": { "name": "Girl digging" } }`. A piece joins one with `"group": "group-ab12c"`. Groups are for editing only: they don't change how the layer looks. |
 
 **Travel** moves a whole layer from `from` to `to` (offsets in scene units) `speed` whole times per loop, starting `phase` (0 to 1) of the way along, then jumps back to the start. Put both ends off screen so the jump is never seen. `bob` and `bobs` add an up-and-down bob a whole number of times per crossing. The Beach day gulls fly this way while their wings flap through a pose cycle:
 
@@ -80,7 +81,7 @@ Layers are listed back to front. Three kinds:
 
 ## Pieces
 
-Every piece can carry `xf: { "x", "y", "s", "r" }`: move, scale and rotate (radians). Shapes and images are drawn around (0, 0), so for them `x` and `y` are simply where the piece sits. Every piece also gets an `id`, and can have a `name`.
+Every piece can carry `xf: { "x", "y", "s", "r" }`: move, scale and rotate (radians). Shapes and images are drawn around (0, 0), so for them `x` and `y` are simply where the piece sits. Every piece also gets an `id`, and can have a `name`, and a `group` naming one of its layer's `groups`. A group's pieces are kept next to each other in `paint`. On opening, a `group` the layer doesn't list gets a group named "Group", and groups with no pieces are dropped.
 
 In a layer with a pose cycle, a piece can list `poses`, one per frame. Each pose adds to the piece's own transform (`x`, `y` and `r` are added, `s` multiplies), or hides the piece for that frame with `"hide": true`. An empty pose `{}` means "as placed". Moving the piece moves every pose with it.
 

@@ -88,11 +88,32 @@ Not tested: the live wallpaper file inside Lively Wallpaper or Wallpaper Engine 
 - **Live wallpaper player.** A small page that plays a scene file. This could serve as a desktop live wallpaper (tools like Lively and Wallpaper Engine can show a web page) or as an embeddable UI background, the idea you raised earlier. It needs research on what each tool accepts before promising anything.
 - **More sizes and shapes.** Ultrawide, 16:10, and true tall scenes for phones, not just a crop.
 
-### 8. Original scenes, made in the editor
+### 8. The interface and layout (built)
+
+A new layout and look for the whole editor, borrowing from the scenes rather than from Adobe's tools. The full design is in [UI.md](UI.md). In summary:
+
+- **Layout.** A tool rail with a store drawer, Layers on the left, a full-stage canvas with zoom and pan, a timeline, and a Piece / Layer / Look inspector that follows the selection. There is a menubar and right-click menus.
+- **Depth you can see.** Layers are numbered from the front and colored by depth (cool far, warm near), with a multiplane diagram above the list.
+- **Visual controls.** Outlines and motions are picked by icon. Materials are swatches rendered in the piece's own colors, and looks are small renders of your scene. Number labels scrub.
+- **Juice.**
+  - Buttons lift and squish, tools wiggle, and store cards hop.
+  - Pieces fly from the store onto the canvas and pop where they land.
+  - Layer rows drag with a ghost and slide into place, and selections spring in.
+  - All of it stops under reduced motion.
+- **Quality of life.**
+  - Toasts with Undo, snapping with guide lines, and crop guides for phone and desktop.
+  - A shortcut sheet, present mode, a first-run tour, and two themes.
+- **Palette.** A warm plum Studio theme and a cream Paper theme, with five accents that each mean one thing.
+
+Added after your review: groups inside layers, so several objects can share a layer and stay selectable as wholes; merging a layer into another; store pieces joining the selected layer as a group; and the depth view's card turning to face you on hover. Beach day went from 37 layers to 31.
+
+Not done: touch-sized handles, sharper zoom past 100% (layers are baked for the screen's height), groups inside groups, and per-group motion (motion and pose timing still belong to a layer).
+
+### 9. Original scenes, made in the editor
 
 Your 2 or 3 original scenes (vineyard at golden hour, redwoods in fog, tidepool, mushroom grove at night), built in the editor with your own materials. Building them is also the first real usability test, and anything awkward goes back into the editor.
 
-### 9. Portfolio packaging
+### 10. Portfolio packaging
 
 README, CASE-STUDY, Lighthouse numbers, recorded loops, and a short usability test with 3 to 5 people making a wallpaper from scratch.
 

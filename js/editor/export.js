@@ -56,7 +56,7 @@
     const text = LB.DOC.serialize(ED.doc);
     download(new Blob([text], { type: "application/json" }), `${slug(ED.doc.title)}.json`);
     const kb = Math.round(text.length / 1024);
-    say(`Saved ${slug(ED.doc.title)}.json (${kb >= 1024 ? (kb / 1024).toFixed(1) + " MB" : kb + " KB"}).`);
+    say(`Saved ${slug(ED.doc.title)}.json (${kb >= 1024 ? (kb / 1024).toFixed(1) + " MB" : kb + " KB"}).`, "ok");
   }
 
   async function openFile(file) {
@@ -79,6 +79,8 @@
     const prev = r.size;
     ED.recording = true;
     try {
+      // The editor's zoom is a view of its own; exports use the scene's real crop.
+      r.setView(null);
       r.resize(w, h);
       r.invalidate();
       r.draw(ED.clock);
@@ -126,6 +128,7 @@
     document.body.classList.add("is-recording");
     try {
       ED.setPlaying(false);
+      r.setView(null);
       r.resize(w, h);
       const enc = new VideoEncoder({
         output: (chunk, meta) => {
@@ -187,6 +190,7 @@
       // A still for the first moment, and for a computer without WebGL2.
       const r = ED.renderer, prev = r.size;
       const pw = ED.doc.aspect >= 1 ? 1280 : Math.round(1280 * ED.doc.aspect), ph = ED.doc.aspect >= 1 ? Math.round(1280 / ED.doc.aspect) : 1280;
+      r.setView(null);
       r.resize(pw - (pw % 2), ph - (ph % 2));
       r.invalidate();
       r.draw(ED.clock);
@@ -252,6 +256,7 @@ ${sources.map(([src, text]) => `<script data-src="${src}">\n${esc(text)}\n</scri
     document.body.classList.add("is-recording");
     try {
       ED.setPlaying(false);
+      r.setView(null);
       r.resize(w, h);
       ED.clock.set(0);
       r.invalidate();
@@ -308,13 +313,25 @@ ${sources.map(([src, text]) => `<script data-src="${src}">\n${esc(text)}\n</scri
     }
   }
 
+  function openNew() { $("#dlg-new").showModal(); }
+  async function openExport() {
+    if (ED.recording) return;
+    const dlg = $("#dlg-export");
+    fillSelect($("#still-size"), sizeOptions(false));
+    fillSelect($("#video-size"), sizeOptions(true));
+    const exact = await exactConfig(1920, 1080, ED.clock.fps);
+    const type = videoType();
+    $("#video-format").textContent = exact
+      ? `An MP4 that loops exactly: every beat is rendered on its own, so it doesn't matter how fast this computer is.`
+      : type ? `This browser can't encode frame by frame, so it records in real time as ${type.startsWith("video/mp4") ? "MP4" : "WebM"}. Keep this tab visible for ${LB.LOOP} seconds; the last beat may run a little short.` : "This browser can't make video.";
+    $("#video-loops").disabled = !exact;
+    if (!dlg.open) dlg.showModal();
+  }
+
   function init() {
-    $("#btn-save").addEventListener("click", saveFile);
-    $("#btn-open").addEventListener("click", () => $("#file-open").click());
     $("#file-open").addEventListener("change", (e) => { if (e.target.files[0]) openFile(e.target.files[0]); e.target.value = ""; });
 
     const dlgNew = $("#dlg-new");
-    $("#btn-new").addEventListener("click", () => dlgNew.showModal());
     dlgNew.addEventListener("click", (e) => {
       const t = e.target.closest("[data-template]");
       if (!t) return;
@@ -328,17 +345,7 @@ ${sources.map(([src, text]) => `<script data-src="${src}">\n${esc(text)}\n</scri
     });
 
     const dlg = $("#dlg-export");
-    $("#btn-export").addEventListener("click", async () => {
-      fillSelect($("#still-size"), sizeOptions(false));
-      fillSelect($("#video-size"), sizeOptions(true));
-      const exact = await exactConfig(1920, 1080, ED.clock.fps);
-      const type = videoType();
-      $("#video-format").textContent = exact
-        ? `An MP4 that loops exactly: every beat is rendered on its own, so it doesn't matter how fast this computer is.`
-        : type ? `This browser can't encode frame by frame, so it records in real time as ${type.startsWith("video/mp4") ? "MP4" : "WebM"}. Keep this tab visible for ${LB.LOOP} seconds; the last beat may run a little short.` : "This browser can't make video.";
-      $("#video-loops").disabled = !exact;
-      dlg.showModal();
-    });
+    $("#btn-export").addEventListener("click", openExport);
     $("#do-live").addEventListener("click", async () => { dlg.close(); await exportLiveWallpaper(); });
     $("#do-still").addEventListener("click", async () => { dlg.close(); await exportStill($("#still-size").value); });
     $("#do-json").addEventListener("click", () => { dlg.close(); saveFile(); });
@@ -355,5 +362,5 @@ ${sources.map(([src, text]) => `<script data-src="${src}">\n${esc(text)}\n</scri
     document.querySelectorAll("dialog [data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
   }
 
-  LB.EXPORT = { init, saveFile, openFile, exportStill, exportVideo, exportVideoExact, exportLiveWallpaper, exactConfig };
+  LB.EXPORT = { init, openNew, openExport, saveFile, openFile, exportStill, exportVideo, exportVideoExact, exportLiveWallpaper, exactConfig };
 })();

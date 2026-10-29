@@ -96,7 +96,7 @@ void main() {
 }`;
 
   // Layer fields that only change how a baked layer is placed and blended, never what's in it.
-  const COMPOSITE_KEYS = new Set(["baseRect", "order", "sig", "id", "name", "depth", "boil", "haze", "far", "offset", "opacity", "hidden", "locked", "pivot", "anim", "index", "note"]);
+  const COMPOSITE_KEYS = new Set(["baseRect", "order", "sig", "id", "name", "depth", "boil", "haze", "far", "offset", "opacity", "hidden", "locked", "pivot", "anim", "index", "note", "groups", "group"]);
   // Scene bounds a layer's texture may cover (the frame plus room for parallax and dragging past the edge).
   const limitOf = (scene) => [-0.35, -0.35, (scene.aspect || 16 / 9) + 0.35, 1.35];
 
@@ -485,8 +485,12 @@ void main() {
 
     // Cover-fit the scene to the canvas. A wider canvas shows a band of the scene, a narrower one a
     // slice; either way the band or slice is centered on the scene's focus point, kept inside the frame.
+    // The editor can pin the view to any scene rectangle (zoom and pan); null goes back to cover-fit.
+    let viewOverride = null;
+    function setView(v) { viewOverride = v ? v.slice() : null; computeView(); }
     function computeView() {
       if (!W || !H) return;
+      if (viewOverride) { view = viewOverride.slice(); dirty = true; return; }
       const a = W / H, A = scene.aspect || 16 / 9;
       const focus = scene.focus || [A / 2, 0.5];
       if (a >= A) {
@@ -820,7 +824,8 @@ void main() {
     }
 
     return {
-      gl, resize, setPost, setGrade, invalidate, draw, sync, readPixels, thumbnail, poseOf, frameOf,
+      gl, resize, setPost, setGrade, invalidate, draw, sync, readPixels, thumbnail, poseOf, frameOf, setView,
+      get viewPinned() { return !!viewOverride; },
       bake: (onProgress) => sync(scene, onProgress),
       get size() { return [W, H]; },
       get view() { return view; },

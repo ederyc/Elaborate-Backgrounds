@@ -229,6 +229,18 @@
         itemIds.add(item.id);
         return true;
       });
+      // Groups: named sets of pieces inside the layer, moved and selected as one object.
+      const groups = L.groups && typeof L.groups === "object" ? L.groups : {};
+      for (const item of L.paint) {
+        if (item.group == null) continue;
+        if (typeof item.group !== "string") { delete item.group; continue; }
+        if (!groups[item.group] || typeof groups[item.group] !== "object") groups[item.group] = { name: "Group" };
+      }
+      for (const [gid, g] of Object.entries(groups)) {
+        if (!L.paint.some((it) => it.group === gid)) { delete groups[gid]; continue; }
+        g.name = typeof g.name === "string" && g.name.trim() ? g.name.trim().slice(0, 60) : "Group";
+      }
+      if (Object.keys(groups).length) L.groups = groups; else delete L.groups;
       return true;
     });
     return { doc: d, warnings };
@@ -260,10 +272,37 @@
     selItem() { return this.sel.item ? this.item(this.sel.layer, this.sel.item) : null; },
     layerIds() { return new Set(this.doc.layers.map((L) => L.id)); },
 
+    // A selection is a layer, plus at most one of: a piece, a group of pieces, or several pieces.
     select(layer, item = null) {
-      this.sel = { layer: layer || null, item: (layer && item) || null };
+      this.sel = { layer: layer || null, item: (layer && item) || null, group: null, multi: null };
       this.emit("select", this.sel);
     },
+    selectGroup(layer, group) {
+      this.sel = { layer, item: null, group, multi: null };
+      this.emit("select", this.sel);
+    },
+    selectMany(layer, ids) {
+      if (ids.length === 1) return this.select(layer, ids[0]);
+      if (!ids.length) return this.select(layer);
+      this.sel = { layer, item: null, group: null, multi: ids.slice() };
+      this.emit("select", this.sel);
+    },
+    selGroup() {
+      const L = this.selLayer();
+      const g = L && this.sel.group && L.groups && L.groups[this.sel.group];
+      return g ? { id: this.sel.group, ...g } : null;
+    },
+    // The pieces the selection covers: one, a group's, or several.
+    selMembers() {
+      const L = this.selLayer();
+      if (!L || !L.paint) return [];
+      if (this.sel.item) { const it = this.selItem(); return it ? [it] : []; }
+      if (this.sel.group) return L.paint.filter((it) => it.group === this.sel.group);
+      if (this.sel.multi) return L.paint.filter((it) => this.sel.multi.includes(it.id));
+      return [];
+    },
+    // True when the selection is pieces rather than a whole layer.
+    hasPieces() { return !!(this.sel.item || this.sel.group || this.sel.multi); },
 
     // A change that's done: apply it, redraw, and record it for undo.
     change(fn, label) {
@@ -282,7 +321,7 @@
     load(doc, label) {
       this.doc = doc;
       history.reset();
-      this.sel = { layer: null, item: null };
+      this.sel = { layer: null, item: null, group: null, multi: null };
       this.emit("load", { label });
       this.emit("select", this.sel);
       this.emit("doc", { label });
@@ -312,8 +351,10 @@
       this.index = j;
       ED.doc = { ...JSON.parse(this.stack[j].s), images: ED.doc.images };
       // Keep the selection if it still exists.
-      if (ED.sel.layer && !ED.selLayer()) ED.sel = { layer: null, item: null };
+      if (ED.sel.layer && !ED.selLayer()) ED.sel = { layer: null, item: null, group: null, multi: null };
       if (ED.sel.item && !ED.selItem()) ED.sel.item = null;
+      if (ED.sel.group && !ED.selGroup()) ED.sel.group = null;
+      if (ED.sel.multi) { const ids = new Set(((ED.selLayer() || {}).paint || []).map((it) => it.id)); ED.sel.multi = ED.sel.multi.filter((id) => ids.has(id)); if (ED.sel.multi.length < 2) ED.sel.multi = null; }
       ED.emit("doc", { label });
       ED.emit("select", ED.sel);
       ED.emit("restore");
@@ -422,6 +463,58 @@
     return { pack: { id: String(raw.id || uid("pack")), name, author, license: raw.license ? String(raw.license).slice(0, 200) : "", pieces }, warnings };
   }
 
-  LB.DOC = { FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal,
+  // ---------- groups and merging layers ----------
+  // In this editor a layer is a plane at one depth, with one pose timing and one motion. Pieces that
+  // share all three can share a layer; inside it, groups keep each object selectable as one thing.
+  function cycleText(c) { return c ? `${c.frames} poses at ${c.rate} a second` : "no poses"; }
+  // Why a layer can't merge into another one, or null when it can.
+  function mergeProblem(src, dst) {
+    if (!src || !dst || src === dst) return "Pick a different layer.";
+    for (const L of [src, dst]) {
+      if (L.type) return `${L.name} is a ${layerKind(L).toLowerCase()}, which keeps a layer of its own.`;
+      if ((L.paint || []).some((it) => it.shader) || L.rect) return `${L.name} is part of the garden study's art, which keeps its own layers.`;
+      if (L.anim && L.anim.type === "cycle") return `${L.name} plays baked frames, so it keeps its own layer.`;
+    }
+    if (src.anim) return `${src.name} ${src.anim.type === "sway" ? "sways" : src.anim.type === "drift" ? "drifts" : "travels across"} on its own, so it needs its own layer.`;
+    if (src.cycle && dst.cycle && (src.cycle.frames !== dst.cycle.frames || src.cycle.rate !== dst.cycle.rate))
+      return `Their poses run on different timings (${cycleText(src.cycle)} and ${cycleText(dst.cycle)}), and a layer has one timing.`;
+    return null;
+  }
+  function groupId(L) {
+    const taken = new Set(Object.keys(L.groups || {}));
+    return uid("group", taken);
+  }
+  // Moves every piece of src into dst, keeping where they are on screen. A layer of several loose
+  // pieces becomes one group named after it; its own groups come along as they are. "front" puts
+  // them on top of dst's pieces (src was in front of dst), otherwise underneath.
+  function mergeLayers(dst, src, { front = true, name } = {}) {
+    const so = src.offset || [0, 0], dof = dst.offset || [0, 0];
+    const dx = so[0] - dof[0], dy = so[1] - dof[1];
+    if (src.cycle && !dst.cycle) dst.cycle = { ...src.cycle };
+    dst.groups = dst.groups || {};
+    const ids = new Set(dst.paint.map((it) => it.id));
+    const map = {};
+    for (const [gid, g] of Object.entries(src.groups || {})) { map[gid] = groupId(dst); dst.groups[map[gid]] = { ...g }; }
+    const loose = src.paint.filter((it) => !it.group);
+    const wrap = loose.length > 1 ? groupId(dst) : null;
+    if (wrap) dst.groups[wrap] = { name: name || src.name };
+    const moved = src.paint.map((it) => {
+      const c = clone(it);
+      const t = LB.ITEMS.xfOf(c);
+      c.xf = { ...t, x: t.x + dx, y: t.y + dy };
+      c.group = c.group ? map[c.group] : wrap || undefined;
+      if (!c.group) delete c.group;
+      if (ids.has(c.id)) c.id = uid("item", ids);
+      ids.add(c.id);
+      // A single loose piece takes the layer's name, if it had none of its own.
+      if (!wrap && !it.group && !c.name && src.name) c.name = name || src.name;
+      return c;
+    });
+    if (front) dst.paint.push(...moved); else dst.paint.unshift(...moved);
+    if (!Object.keys(dst.groups).length) delete dst.groups;
+    return moved;
+  }
+
+  LB.DOC = { mergeProblem, mergeLayers, groupId, cycleText, FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal,
     dbAll, dbPut, PACK_FORMAT, normalizePiece, normalizePack };
 })();

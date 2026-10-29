@@ -50,6 +50,35 @@
     return nl;
   }
 
+  // A layer's pieces as stacking units: a group's run of pieces is one unit, a loose piece is one.
+  function unitsOf(paint) {
+    const out = [];
+    for (const it of paint) {
+      const last = out[out.length - 1];
+      if (it.group && last && last[0].group === it.group) last.push(it);
+      else out.push([it]);
+    }
+    return out;
+  }
+  // Drops groups that lost all their pieces, and a group of one becomes a loose piece.
+  function tidyGroups(L) {
+    if (!L.groups) return;
+    for (const gid of Object.keys(L.groups)) {
+      const m = L.paint.filter((it) => it.group === gid);
+      if (m.length === 0) delete L.groups[gid];
+      else if (m.length === 1) { delete m[0].group; if (!m[0].name) m[0].name = L.groups[gid].name; delete L.groups[gid]; }
+    }
+    if (!Object.keys(L.groups).length) delete L.groups;
+  }
+  // The selected layer, when a ready-made layer (an umbrella, say) can join it as a group instead of
+  // getting a layer of its own: a paint layer, unlocked, with the same pose timing or none.
+  function joinTarget(made) {
+    const L = ED.selLayer();
+    if (!isPaint(L) || L.locked || !made || made.type || made.anim) return null;
+    if (made.cycle && !(L.cycle && L.cycle.frames === made.cycle.frames && L.cycle.rate === made.cycle.rate)) return null;
+    return D().mergeProblem({ ...made, name: "It" }, L) ? null : L;
+  }
+
   const ACT = {
     addLayer() {
       const L = makeLayer();
@@ -71,6 +100,8 @@
 
     addLayerObject(layer, label) {
       const L = { id: D().uid("layer", ED.layerIds()), seed: newSeed(), boil: 1.2, ...layer };
+      // Every piece needs an id of its own (to be selected, and to save and reopen unchanged).
+      if (L.paint) L.paint = L.paint.map((it) => (it.id ? it : { ...it, id: D().uid("item") }));
       L.name = L.name || D().titleCase(D().layerKind(L));
       ED.change((doc) => insertLayer(doc, L), label || "Add layer");
       ED.select(L.id);
@@ -81,10 +112,12 @@
       if (entry.piece) return ACT.addPiece(entry.piece, at || ED.viewCenter());
       const made = LB.LIBRARY.make(entry, at);
       if (made.item) ACT.addItem(made.item, `Add ${entry.name}`);
+      else if (!entry.fixed && joinTarget(made.layer)) ACT.addAsGroup(made.layer, entry.name);
       else {
         // Backdrops go to the very back; everything else in front of the selection.
         if (entry.fixed) {
           const L = { id: D().uid("layer", ED.layerIds()), seed: newSeed(), ...made.layer };
+          if (L.paint) L.paint = L.paint.map((it) => (it.id ? it : { ...it, id: D().uid("item") }));
           ED.change((doc) => doc.layers.unshift(L), `Add ${entry.name}`);
           ED.select(L.id);
           say(`Added ${L.name} at the back.`);
@@ -119,6 +152,27 @@
     duplicate() {
       const L = ED.selLayer();
       if (!L) return;
+      const members = ED.selMembers();
+      if (members.length > 1 || ED.sel.group) {
+        // A group (or several pieces) is copied as a block, just in front of the original.
+        const gid = ED.sel.group ? D().groupId(L) : null;
+        const copies = members.map((it) => {
+          const c = D().clone(it);
+          c.id = D().uid("item");
+          const t = I().xfOf(c);
+          c.xf = { ...t, x: t.x + 0.03, y: t.y + 0.03 };
+          if (gid) c.group = gid;
+          return c;
+        });
+        const at = Math.max(...members.map((it) => L.paint.indexOf(it))) + 1;
+        ED.change(() => {
+          if (gid) L.groups[gid] = { name: `${ED.selGroup().name} copy` };
+          L.paint.splice(at, 0, ...copies);
+        }, gid ? "Duplicate group" : "Duplicate pieces");
+        if (gid) ED.selectGroup(L.id, gid); else ED.selectMany(L.id, copies.map((c) => c.id));
+        say(gid ? `Duplicated ${L.groups[gid].name.replace(/ copy$/, "")}.` : `Duplicated ${copies.length} pieces.`);
+        return;
+      }
       const item = ED.selItem();
       if (item) {
         const copy = D().clone(item);
@@ -143,33 +197,57 @@
     remove() {
       const L = ED.selLayer();
       if (!L) return;
-      const item = ED.selItem();
-      if (item) {
-        const name = D().itemName(item, ED.doc);
-        ED.change(() => L.paint.splice(L.paint.indexOf(item), 1), `Delete ${name}`);
+      const members = ED.selMembers();
+      if (ED.hasPieces() && members.length) {
+        const g = ED.selGroup();
+        const name = g ? g.name : members.length > 1 ? `${members.length} pieces` : D().itemName(members[0], ED.doc);
+        ED.change(() => {
+          L.paint = L.paint.filter((it) => !members.includes(it));
+          if (g) delete L.groups[g.id];
+          tidyGroups(L);
+        }, `Delete ${name}`);
         ED.select(L.id);
-        say(`Deleted ${name}. Ctrl+Z brings it back.`);
+        ED.emit("status", { msg: `Deleted ${name}.`, action: { label: "Undo", run: () => ED.undo() } });
       } else {
         ED.change((doc) => doc.layers.splice(layerIndex(L.id), 1), `Delete ${L.name}`);
         ED.select(null);
-        say(`Deleted ${L.name}. Ctrl+Z brings it back.`);
+        ED.emit("status", { msg: `Deleted ${L.name}.`, action: { label: "Undo", run: () => ED.undo() } });
       }
     },
 
     // Forward = toward the viewer: later in the list, drawn on top.
+    // Inside a layer, a group moves as one block, and a loose piece hops over whole groups.
     restack(step) {
       const L = ED.selLayer();
       if (!L) return;
-      const item = ED.selItem();
-      if (item) {
-        const i = L.paint.indexOf(item), j = i + step;
-        if (j < 0 || j >= L.paint.length) return say(step > 0 ? "Already at the front of its layer." : "Already at the back of its layer.");
-        ED.change(() => { L.paint.splice(i, 1); L.paint.splice(j, 0, item); }, step > 0 ? "Bring forward" : "Send backward");
-      } else {
-        const i = layerIndex(L.id), j = i + step;
-        if (j < 0 || j >= ED.doc.layers.length) return say(step > 0 ? "Already the front layer." : "Already the back layer.");
-        ED.change((doc) => { doc.layers.splice(i, 1); doc.layers.splice(j, 0, L); }, step > 0 ? "Layer forward" : "Layer backward");
+      if (ED.hasPieces()) {
+        const members = ED.selMembers();
+        if (!members.length) return;
+        const item = ED.sel.item ? members[0] : null;
+        // A piece inside a group moves only among the group's pieces.
+        if (item && item.group) {
+          const i = L.paint.indexOf(item), j = i + step, other = L.paint[j];
+          if (!other || other.group !== item.group) return say(step > 0 ? "Already at the front of its group." : "Already at the back of its group.");
+          ED.change(() => { L.paint[i] = other; L.paint[j] = item; }, step > 0 ? "Bring forward" : "Send backward");
+          ED.emit("select", ED.sel);
+          return;
+        }
+        const units = unitsOf(L.paint);
+        const set = new Set(members);
+        // The selection becomes one block, sitting where its front-most piece is, then hops one unit.
+        const frontIdx = Math.max(...members.map((it) => L.paint.indexOf(it)));
+        const rest = units.map((u) => u.filter((it) => !set.has(it))).filter((u) => u.length);
+        const pos = rest.filter((u) => L.paint.indexOf(u[0]) < frontIdx).length;
+        const target = pos + (step > 0 ? 1 : -1);
+        if (target < 0 || target > rest.length) return say(step > 0 ? "Already at the front of its layer." : "Already at the back of its layer.");
+        rest.splice(target, 0, L.paint.filter((it) => set.has(it)));
+        ED.change(() => { L.paint = rest.flat(); }, step > 0 ? "Bring forward" : "Send backward");
+        ED.emit("select", ED.sel);
+        return;
       }
+      const i = layerIndex(L.id), j = i + step;
+      if (j < 0 || j >= ED.doc.layers.length) return say(step > 0 ? "Already the front layer." : "Already the back layer.");
+      ED.change((doc) => { doc.layers.splice(i, 1); doc.layers.splice(j, 0, L); }, step > 0 ? "Layer forward" : "Layer backward");
       ED.emit("select", ED.sel);
     },
 
@@ -182,12 +260,30 @@
       }, "Reorder layers");
     },
 
+    // Moves the selected piece, group or pieces into another paint layer, keeping where they are on screen.
     moveItemToLayer(targetId) {
-      const from = ED.selLayer(), item = ED.selItem(), to = ED.layer(targetId);
-      if (!from || !item || !isPaint(to) || to === from) return;
-      ED.change(() => { from.paint.splice(from.paint.indexOf(item), 1); to.paint.push(item); }, `Move to ${to.name}`);
-      ED.select(to.id, item.id);
-      say(`Moved ${D().itemName(item, ED.doc)} to ${to.name}.`);
+      const from = ED.selLayer(), to = ED.layer(targetId);
+      const members = ED.selMembers();
+      if (!from || !members.length || !isPaint(to) || to === from) return;
+      const g = ED.selGroup();
+      if (from.cycle && to.cycle && (from.cycle.frames !== to.cycle.frames || from.cycle.rate !== to.cycle.rate) && members.some((it) => it.poses))
+        return say(`${to.name} runs ${D().cycleText(to.cycle)}, so these poses wouldn't fit. Give both layers the same poses first.`, "warn");
+      const fo = from.offset || [0, 0], tof = to.offset || [0, 0];
+      let gid = null;
+      ED.change(() => {
+        from.paint = from.paint.filter((it) => !members.includes(it));
+        if (g) { gid = D().groupId(to); to.groups = to.groups || {}; to.groups[gid] = { name: g.name }; delete from.groups[g.id]; }
+        for (const it of members) {
+          const t = I().xfOf(it);
+          it.xf = { ...t, x: t.x + fo[0] - tof[0], y: t.y + fo[1] - tof[1] };
+          if (gid) it.group = gid; else delete it.group;
+          if (!to.cycle) delete it.poses;
+          to.paint.push(it);
+        }
+        tidyGroups(from);
+      }, `Move to ${to.name}`);
+      if (gid) ED.selectGroup(to.id, gid); else ED.selectMany(to.id, members.map((it) => it.id));
+      say(`Moved ${g ? g.name : members.length > 1 ? `${members.length} pieces` : D().itemName(members[0], ED.doc)} to ${to.name}.`);
     },
 
     toggle(id, key) {
@@ -199,16 +295,18 @@
       say(`${L.name} is ${key === "hidden" ? (on ? "hidden" : "visible") : on ? "locked" : "unlocked"}.`);
     },
 
-    // Moves the selection by (dx, dy) scene units: the item, or the whole layer when no item is selected.
+    // Moves the selection by (dx, dy) scene units: its pieces, or the whole layer when no piece is selected.
     nudge(dx, dy, commit = true) {
       const L = ED.selLayer();
       if (!L || L.locked) return;
-      const item = ED.selItem();
+      const members = ED.selMembers();
       const fn = () => {
-        if (item) {
+        if (members.length) {
           const f = ED.renderer.frameOf(L.id, ED.clock);
-          const t = I().atPose(item, f).xf;
-          ACT.setPosedXf(item, L, { ...t, x: t.x + dx, y: t.y + dy }, f);
+          for (const it of members) {
+            const t = I().atPose(it, f).xf;
+            ACT.setPosedXf(it, L, { ...t, x: t.x + dx, y: t.y + dy }, f);
+          }
         } else {
           const o = L.offset || [0, 0];
           L.offset = [o[0] + dx, o[1] + dy];
@@ -417,18 +515,24 @@
   }
 
   ACT.savePiece = async function (kind) {
-    const L = ED.selLayer(), item = ED.selItem();
+    const L = ED.selLayer();
+    let item = ED.selItem();
+    // A group, or several pieces, is saved as one piece that adds back as a group.
+    if (kind === "item" && !item && ED.selMembers().length) kind = "group";
     if (!L || (kind === "item" && !item)) return;
-    const data = D().clone(kind === "item" ? item : L);
+    const g = ED.selGroup();
+    const members = ED.selMembers();
+    const name = kind === "item" ? D().itemName(item, ED.doc) : kind === "group" ? (g ? g.name : `${L.name} pieces`) : L.name;
+    const data = kind === "group" ? { name, depth: L.depth, boil: L.boil, paint: D().clone(members).map((it) => { delete it.group; return it; }), ...(L.cycle ? { cycle: { ...L.cycle } } : {}) }
+      : D().clone(kind === "item" ? item : L);
     delete data.id;
     if (data.paint) data.paint.forEach((it) => delete it.id);
-    const name = kind === "item" ? D().itemName(item, ED.doc) : L.name;
     const images = {};
     for (const id of picturesIn(data)) if (ED.doc.images[id]) images[id] = ED.doc.images[id];
     let thumb = null;
     try {
-      const layer = kind === "item" ? { id: "thumb", seed: 3, paint: [data] } : { ...data, id: "thumb", offset: [0, 0] };
-      const img = await ED.renderer.thumbnail(layer, 144, 96, { ...ED.doc });
+      const layer = kind === "item" ? { id: "thumb", seed: 3, paint: [data] } : { seed: 3, ...data, id: "thumb", offset: [0, 0] };
+      const img = await LB.LAYERS.renderThumb(layer, 200, 132, { ...ED.doc });
       if (img) {
         const c = document.createElement("canvas");
         c.width = img.width; c.height = img.height;
@@ -436,7 +540,7 @@
         thumb = c.toDataURL("image/png");
       }
     } catch {}
-    const piece = { id: D().uid("piece"), name, kind, data, images, thumb, credit: "Yours", created: Date.now() };
+    const piece = { id: D().uid("piece"), name, kind: kind === "group" ? "layer" : kind, data, images, thumb, credit: "Yours", created: Date.now() };
     try {
       await D().dbPut("pieces", piece.id, piece);
       ED.emit("pieces");
@@ -465,7 +569,8 @@
       const off = data.offset || [0, 0];
       if (box) data.offset = [off[0] + at[0] - (box[0] + box[2]) / 2, off[1] + at[1] - (box[1] + box[3]) / 2];
       (data.paint || []).forEach((it) => (it.id = D().uid("item")));
-      ACT.addLayerObject({ ...data, name: piece.name }, `Add ${piece.name}`);
+      if (!data.type && joinTarget(data)) ACT.addAsGroup({ ...data, name: piece.name }, piece.name);
+      else ACT.addLayerObject({ ...data, name: piece.name }, `Add ${piece.name}`);
     }
   };
 
@@ -587,6 +692,134 @@
       ED.select(L.id, item.id);
       say(`${D().itemName(item, ED.doc)} now ${kind.startsWith("turntable") ? `turns all the way round in ${n} poses` : kind === "bounce" ? "bounces, squashing as it lands" : "wobbles from side to side"}, ${(n / rate).toString()} s a cycle.`);
     },
+  });
+
+
+  // ======================= groups =======================
+  Object.assign(ACT, {
+    // A ready-made layer, added into the selected layer as one group.
+    addAsGroup(made, name) {
+      const L = joinTarget(made);
+      if (!L) return;
+      const src = { ...D().clone(made), name, paint: (made.paint || []).map((it) => ({ ...D().clone(it), id: D().uid("item") })) };
+      let moved;
+      ED.change(() => { moved = D().mergeLayers(L, src, { front: true, name }); }, `Add ${name}`);
+      const g = moved[0] && moved[0].group;
+      if (g) ED.selectGroup(L.id, g); else if (moved[0]) ED.select(L.id, moved[0].id);
+      say(`Added ${name} to ${L.name}, as one group.`);
+    },
+
+    // Ctrl+G: the selected pieces become one group, stacked where the front-most of them was.
+    group() {
+      const L = ED.selLayer();
+      const members = ED.selMembers();
+      if (!L || members.length < 2 || ED.sel.group) return say(ED.sel.group ? "That's already a group." : "Select two or more pieces in one layer first: Shift-click them.");
+      const gid = D().groupId(L);
+      const n = Object.keys(L.groups || {}).length + 1;
+      ED.change(() => {
+        const set = new Set(members);
+        const top = Math.max(...members.map((it) => L.paint.indexOf(it)));
+        const keepBelow = L.paint.slice(0, top + 1).filter((it) => !set.has(it));
+        const above = L.paint.slice(top + 1);
+        for (const it of members) it.group = gid;
+        L.groups = L.groups || {};
+        L.groups[gid] = { name: `Group ${n}` };
+        L.paint = [...keepBelow, ...members, ...above];
+        tidyGroups(L);
+      }, "Group");
+      ED.selectGroup(L.id, gid);
+      say(`Grouped ${members.length} pieces. Click the group to move it as one; double-click to reach a piece inside.`);
+    },
+
+    ungroup() {
+      const L = ED.selLayer(), g = ED.selGroup();
+      if (!L || !g) return;
+      const members = ED.selMembers();
+      ED.change(() => { members.forEach((it) => delete it.group); delete L.groups[g.id]; tidyGroups(L); }, `Ungroup ${g.name}`);
+      ED.selectMany(L.id, members.map((it) => it.id));
+      say(`Ungrouped ${g.name}: its ${members.length} pieces are loose in ${L.name} now.`);
+    },
+
+    renameGroup(gid, name) {
+      const L = ED.selLayer();
+      if (!L || !L.groups || !L.groups[gid] || !name.trim()) return;
+      ED.change(() => (L.groups[gid].name = name.trim().slice(0, 60)), "Rename group");
+      ED.emit("names");
+    },
+
+    // The selected piece leaves its group (and stays where it is in the layer).
+    takeOutOfGroup() {
+      const L = ED.selLayer(), item = ED.selItem();
+      if (!L || !item || !item.group) return;
+      const gname = L.groups[item.group].name;
+      ED.change(() => {
+        const gid = item.group;
+        delete item.group;
+        // Keep the group's pieces together: the piece goes just in front of them.
+        L.paint.splice(L.paint.indexOf(item), 1);
+        const last = L.paint.map((it) => it.group).lastIndexOf(gid);
+        L.paint.splice(last + 1, 0, item);
+        tidyGroups(L);
+      }, "Take out of group");
+      ED.select(L.id, item.id);
+      say(`${D().itemName(item, ED.doc)} is out of ${gname}.`);
+    },
+
+    // A whole layer's pieces move into another layer (as one group), and the emptied layer goes.
+    mergeLayer(srcId, dstId) {
+      const src = ED.layer(srcId), dst = ED.layer(dstId);
+      const problem = D().mergeProblem(src, dst);
+      if (problem) return say(`Can't merge: ${problem}`, "warn");
+      const front = layerIndex(srcId) > layerIndex(dstId);
+      const adopts = src.cycle && !dst.cycle;
+      let moved;
+      ED.change((doc) => {
+        moved = D().mergeLayers(dst, src, { front });
+        doc.layers.splice(doc.layers.indexOf(src), 1);
+      }, `Merge ${src.name} into ${dst.name}`);
+      const g = moved[0] && moved[0].group;
+      if (g && moved.every((it) => it.group === g)) ED.selectGroup(dst.id, g); else ED.select(dst.id);
+      const depthNote = Math.abs((src.depth || 0) - (dst.depth || 0)) > 0.02 ? ` It sits at ${dst.name}'s depth now.` : "";
+      ED.emit("status", { msg: `Merged ${src.name} into ${dst.name}.${adopts ? ` ${dst.name} takes on its ${D().cycleText(src.cycle)}.` : ""}${depthNote}`, tone: "ok", action: { label: "Undo", run: () => ED.undo() } });
+    },
+
+    // The selected group (or pieces) gets a layer of its own, just in front of this one, at the same depth.
+    splitToLayer() {
+      const L = ED.selLayer(), members = ED.selMembers(), g = ED.selGroup();
+      if (!L || !members.length) return;
+      const name = g ? g.name : members.length > 1 ? `${L.name} pieces` : D().itemName(members[0], ED.doc);
+      const nl = { id: D().uid("layer", ED.layerIds()), name, depth: L.depth, boil: L.boil, haze: L.haze || 0, far: L.far, seed: newSeed(), paint: [],
+        ...(L.offset ? { offset: L.offset.slice() } : {}), ...(L.cycle && members.some((it) => it.poses) ? { cycle: { ...L.cycle } } : {}) };
+      ED.change((doc) => {
+        L.paint = L.paint.filter((it) => !members.includes(it));
+        if (g) delete L.groups[g.id];
+        members.forEach((it) => delete it.group);
+        nl.paint = members;
+        tidyGroups(L);
+        doc.layers.splice(doc.layers.indexOf(L) + 1, 0, nl);
+      }, `Own layer for ${name}`);
+      ED.select(nl.id);
+      say(`${name} has a layer of its own now, just in front of ${L.name}.`);
+    },
+
+    // Moves, scales and turns pieces together around a point c (scene units, without the layer's offset):
+    // each one's position swings around c and its own size and turn change by the same amount.
+    transformMembers(L, base, f, c, { dx = 0, dy = 0, s = 1, r = 0 }) {
+      const cs = Math.cos(r), sn = Math.sin(r);
+      for (const { item, t, p } of base) {
+        const vx = (p[0] - c[0]) * s, vy = (p[1] - c[1]) * s;
+        const nx = c[0] + cs * vx - sn * vy + dx, ny = c[1] + sn * vx + cs * vy + dy;
+        ACT.setPosedXf(item, L, { x: t.x + nx - p[0], y: t.y + ny - p[1], s: t.s * s, r: t.r + r }, f);
+      }
+    },
+    // What transformMembers needs, captured once at the start of a drag or a slider move.
+    membersBase(L, members, f) {
+      return members.map((item) => {
+        const posed = I().atPose(item, f);
+        return { item, t: I().xfOf(posed), p: I().position(posed, L.rect ? { rect: L.rect } : L) };
+      });
+    },
+    unitsOf,
   });
 
   LB.ACT = ACT;
