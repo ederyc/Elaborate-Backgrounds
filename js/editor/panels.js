@@ -105,14 +105,31 @@
   let storeCat = "Shapes";
   LB.THUMBS = LB.THUMBS || new Map();
 
+  // My pieces and installed packs live in the browser (IndexedDB); this is the copy in memory.
+  let myPieces = [], packs = [];
+  async function loadPieces() {
+    try {
+      myPieces = (await D().dbAll("pieces")).sort((a, b) => (a.created || 0) - (b.created || 0));
+      packs = await D().dbAll("packs");
+    } catch {
+      myPieces = []; packs = [];
+    }
+  }
+  const pieceEntry = (pc, cat) => ({ id: "piece:" + pc.id, cat, name: pc.name, credit: pc.credit || "Yours", piece: pc, thumb: pc.thumb });
   function storeEntries() {
-    return [...LB.LIBRARY.ENTRIES, ...LB.LIBRARY.imageEntries(ED.doc)];
+    return [...LB.LIBRARY.ENTRIES, ...LB.LIBRARY.imageEntries(ED.doc),
+      ...myPieces.map((pc) => pieceEntry(pc, "My pieces")),
+      ...packs.flatMap((pk) => pk.pieces.map((pc) => pieceEntry(pc, "pack:" + pk.id)))];
+  }
+  function categories() {
+    return [...LB.LIBRARY.CATEGORIES.map((c) => [c, c]), ["My pieces", "My pieces"], ...packs.map((pk) => ["pack:" + pk.id, pk.name])];
   }
   function renderStore() {
     const cats = $("#store-cats");
     cats.innerHTML = "";
-    for (const c of LB.LIBRARY.CATEGORIES) {
-      cats.append(h("button", { type: "button", class: "chip", "aria-pressed": String(c === storeCat), text: c, onclick: () => { storeCat = c; renderStore(); } }));
+    if (!categories().some(([c]) => c === storeCat)) storeCat = "Shapes";
+    for (const [c, label] of categories()) {
+      cats.append(h("button", { type: "button", class: "chip", "aria-pressed": String(c === storeCat), text: label, onclick: () => { storeCat = c; renderStore(); } }));
     }
     const grid = $("#store-grid");
     grid.innerHTML = "";
@@ -121,15 +138,33 @@
       grid.append(h("p", { class: "store-note", text: "Pictures you import live in the scene file. Photos of your own materials can also fill a shape: pick Photo as its material." }));
       if (!list.length) grid.append(h("p", { class: "store-note", text: "Nothing yet. Use Import picture, or drop image files onto the canvas." }));
     }
+    if (storeCat === "My pieces") {
+      grid.append(h("p", { class: "store-note", text: "Pieces you've saved, kept in this browser. Select a piece or a layer and use Save to My pieces in Properties. Share them as a pack file." }),
+        h("div", { class: "store-actions" },
+          h("button", { type: "button", class: "btn-small", text: "Save as a pack", disabled: !myPieces.length, onclick: () => $("#dlg-pack").showModal() }),
+          h("button", { type: "button", class: "btn-small", text: "Install a pack", onclick: () => $("#file-pack").click() })));
+      if (!myPieces.length) grid.append(h("p", { class: "store-note", text: "Nothing saved yet." }));
+    }
+    const pack = storeCat.startsWith("pack:") && packs.find((pk) => "pack:" + pk.id === storeCat);
+    if (pack) {
+      grid.append(h("p", { class: "store-note", text: `${pack.name}${pack.author ? `, by ${pack.author}` : ""}. ${pack.license ? `License: ${pack.license}.` : "No license given."}` }),
+        h("div", { class: "store-actions" }, h("button", { type: "button", class: "btn-small danger", text: "Remove this pack", onclick: () => ACT().removePack(pack) })));
+    }
     for (const e of list) {
-      const thumb = e.image ? ED.doc.images[e.image].src : LB.THUMBS.get(e.id);
+      const thumb = e.thumb || (e.image ? ED.doc.images[e.image].src : LB.THUMBS.get(e.id));
       const btn = h("button", { type: "button", class: "store-item", draggable: "true", "data-entry": e.id, title: `${e.name}: ${e.credit}. Click to add it in the middle, or drag it onto the canvas.`,
         onclick: () => ACT().addFromEntry(e, e.fixed ? null : ED.viewCenter()) },
         thumb ? h("img", { src: thumb, alt: "", loading: "lazy" }) : h("span", { class: `thumb-placeholder${e.id === "sparkles" ? " sparkle" : ""}`, "aria-hidden": "true" }),
         h("span", { class: "store-name", text: e.name }),
-        h("span", { class: "store-credit", text: e.credit === "Your image" ? "Yours" : "Free" }));
+        h("span", { class: "store-credit", text: e.piece ? (storeCat === "My pieces" ? "Yours" : "From a pack") : e.credit === "Your image" ? "Yours" : "Free" }));
       btn.addEventListener("dragstart", (ev) => { ev.dataTransfer.setData("text/x-entry", e.id); ev.dataTransfer.effectAllowed = "copy"; });
-      grid.append(btn);
+      if (storeCat === "My pieces") {
+        // A card with its own remove button next to it.
+        const wrap = h("div", { class: "store-card" }, btn,
+          h("button", { type: "button", class: "icon-btn small store-remove", "aria-label": `Remove ${e.name} from My pieces`, title: "Remove from My pieces", html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+            onclick: () => ACT().deletePiece(e.piece) }));
+        grid.append(wrap);
+      } else grid.append(btn);
     }
   }
   LB.findEntry = (id) => storeEntries().find((e) => e.id === id);
@@ -183,18 +218,65 @@
   ];
   const BEAD_DEFAULT = { scale: 140, density: 0.2, size: 0.3, colors: ["#F5F2CC", "#FAF8F0"] };
 
+  // Boil photos: one or two more photos of the same object, swapped pose by pose.
+  const BOIL_FIELDS = (L, when) => [
+    { type: "heading", label: "Boil photos", when },
+    { type: "note", when, label: "Photograph the same piece two or three times, nudged a millimeter between shots. Swapping them on the beat is real boil, from real material." },
+    ...[0, 1].map((i) => ({
+      key: `boilImages.${i}`, label: i === 0 ? "Second photo" : "Third photo", type: "select",
+      when: (it) => when(it) && (i === 0 || (it.boilImages && it.boilImages.length >= 1)),
+      options: () => [["", "None"], ...imageOptions()],
+      get: (it) => (it.boilImages && it.boilImages[i]) || "",
+      set: (it, v) => {
+        const list = (it.boilImages || []).slice();
+        list[i] = v;
+        const clean = list.filter(Boolean).slice(0, 2);
+        if (clean.length) it.boilImages = clean; else delete it.boilImages;
+        if (clean.length && !L.cycle) L.cycle = { frames: clean.length + 1, rate: 6 };
+      },
+    })),
+  ];
+
   function itemFields(item, L) {
     const isShape = item.el === "shape";
     const f = [{ key: "name", label: "Name", type: "text", get: (it) => D().itemName(it, ED.doc), set: (it, v) => { if (v.trim()) it.name = v.trim(); else delete it.name; } }, ...XF_FIELDS(L)];
-    if (item.poses) f.push({ type: "note", label: `This piece has ${item.poses.length} poses. Moving, scaling or rotating it changes every pose together.` });
+    if (L.cycle) {
+      const pf = () => ED.renderer.frameOf(L.id, ED.clock);
+      f.push({ type: "heading", label: "Poses" },
+        { type: "note", label: () => `Pose ${pf() + 1} of ${L.cycle.frames} is on screen. ${item.poses ? "This piece moves between poses." : "This piece holds still in every pose."} Choose a pose under the canvas; with "This pose only", moving the piece changes just that pose.` },
+        { key: "poseHide", label: () => `Hidden in pose ${pf() + 1}`, type: "toggle",
+          get: (it) => !!(it.poses && it.poses[pf()] && it.poses[pf()].hide),
+          set: (it, v) => {
+            const f0 = pf();
+            it.poses = (it.poses || []).slice(0, L.cycle.frames);
+            while (it.poses.length < L.cycle.frames) it.poses.push({});
+            const pz = { ...it.poses[f0] };
+            if (v) pz.hide = true; else delete pz.hide;
+            it.poses[f0] = pz;
+            if (it.poses.every((q) => !Object.keys(q).length)) delete it.poses;
+          } });
+    }
     if (isShape) {
       f.push(
         { type: "heading", label: "Shape" },
-        { key: "shape", label: "Outline", type: "select", options: opts([["rect", "Rectangle"], ["ellipse", "Ellipse"], ["polygon", "Polygon or star"], ["blob", "Blob (round lobes)"], ["path", "Custom outline (points)"]]),
+        { key: "shape", label: "Outline", type: "select",
+          options: (it) => [["rect", "Rectangle"], ["ellipse", "Ellipse"], ["polygon", "Polygon or star"], ["blob", "Blob (round lobes)"], ["path", "Custom outline (points)"], ...(it.shape === "mask" ? [["mask", "Cut-out from a picture"]] : [])],
           set: (it, v) => {
             if (v === "path" && !it.points) {
+              // Start the outline from the shape it was, so nothing jumps.
               const b = LB.ELEMENTS.shape.outline(it);
-              it.points = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+              const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, rx = (b[2] - b[0]) / 2, ry = (b[3] - b[1]) / 2;
+              if (it.shape === "ellipse" || it.shape === "blob") {
+                it.points = Array.from({ length: 12 }, (_, i) => [cx + rx * Math.cos((i / 12) * Math.PI * 2), cy + ry * Math.sin((i / 12) * Math.PI * 2)]);
+                it.smooth = true;
+              } else if (it.shape === "polygon") {
+                const n = Math.max(3, it.sides || 5), inner = Math.cos(Math.PI / n) * (1 - (it.star || 0) * 0.75);
+                it.points = [];
+                for (let i = 0; i < n * (it.star ? 2 : 1); i++) {
+                  const a = -Math.PI / 2 + (i * Math.PI * (it.star ? 1 : 2)) / n, k = it.star && i % 2 ? inner : 1;
+                  it.points.push([cx + rx * k * Math.cos(a), cy + ry * k * Math.sin(a)]);
+                }
+              } else it.points = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
             }
             if (v === "blob" && !it.lobes) {
               const w = it.w || 0.3, hh = it.h || 0.2;
@@ -203,9 +285,16 @@
             if (v !== "blob" && !it.w) { const b = LB.ELEMENTS.shape.outline(it); it.w = b[2] - b[0]; it.h = b[3] - b[1]; }
             it.shape = v;
           } },
-        { key: "w", label: "Width", type: "range", min: 0.01, max: 2.4, step: 0.005, when: (it) => it.shape !== "blob" && it.shape !== "path" },
-        { key: "h", label: "Height", type: "range", min: 0.01, max: 1.6, step: 0.005, when: (it) => it.shape !== "blob" && it.shape !== "path" },
-        { type: "note", label: (it) => `A cut-out through ${it.points.length} points. Scale and rotate it under Placement. Editing the points themselves comes in a later version.`, when: (it) => it.shape === "path" },
+        { key: "w", label: "Width", type: "range", min: 0.01, max: 2.4, step: 0.005, when: (it) => !["blob", "path", "mask"].includes(it.shape) },
+        { key: "h", label: "Height", type: "range", min: 0.01, max: 1.6, step: 0.005, when: (it) => !["blob", "path", "mask"].includes(it.shape) },
+        { key: "w", label: "Width", type: "range", min: 0.02, max: 2.4, step: 0.005, when: (it) => it.shape === "mask",
+          set: (it, v) => { const im = ED.doc.images[it.image]; it.w = v; if (im) it.h = (v * im.h) / im.w; } },
+        { type: "note", label: (it) => `A cut-out through ${it.points.length} points. Use Edit points above, or double-click it on the canvas.`, when: (it) => it.shape === "path" },
+        { key: "smooth", label: "Smooth curves between the points", type: "toggle", when: (it) => it.shape === "path" },
+        { key: "mask.from", label: "Cut out", type: "select", when: (it) => it.shape === "mask",
+          options: opts([["dark", "The dark parts (paper on a light background)"], ["light", "The light parts (paper on a dark background)"], ["alpha", "The see-through parts of a PNG"]]) },
+        { key: "mask.threshold", label: "Where the edge falls", type: "range", min: 0.05, max: 0.95, step: 0.01, fallback: 0.5, when: (it) => it.shape === "mask",
+          hint: "Move it if the cut-out picks up shadows or misses thin parts." },
         { key: "round", label: "Round the corners", type: "range", min: 0, max: 0.03, step: 0.0005, fallback: 0, when: (it) => it.shape === "path" },
         { key: "corner", label: "Corner roundness", type: "range", ...pct, when: (it) => it.shape === "rect", fallback: 0.15 },
         { key: "sides", label: "Points", type: "range", min: 3, max: 12, step: 1, when: (it) => it.shape === "polygon", fallback: 5 },
@@ -214,8 +303,8 @@
         { type: "heading", label: "Material" },
         { key: "material", label: "Material", type: "select", options: (it) => [["paper", "Painted paper"], ["felt", "Felt"], ["clay", "Clay"], ["foliage", "Clumped foliage"], ["cardboard", "Cardboard"], ["stripes", "Painted stripes"], ["gradient", "Two-color wash"], ["water", "Painted water"], ["sand", "Sand"], ...(imageOptions().length ? [["photo", "Photo (your picture)"]] : [])],
           set: (it, v) => { it.material = v; if (v === "photo" && !ED.doc.images[it.image]) it.image = imageOptions()[0][0]; } },
-        { key: "image", label: "Picture", type: "select", options: imageOptions, when: (it) => it.material === "photo" },
-        { key: "tile", label: "Picture tile size", type: "range", min: 0.05, max: 1.5, step: 0.01, when: (it) => it.material === "photo", fallback: 0.4 },
+        { key: "image", label: "Picture", type: "select", options: imageOptions, when: (it) => it.material === "photo" || it.shape === "mask" },
+        { key: "tile", label: "Picture tile size", type: "range", min: 0.05, max: 1.5, step: 0.01, when: (it) => it.material === "photo" && it.shape !== "mask", fallback: 0.4 },
         { key: "tint", label: "Tint toward color", type: "range", ...pct, when: (it) => it.material === "photo", fallback: 0 },
         { key: "colors.0", label: (it) => ({ gradient: "Top color", photo: "Tint color", water: "Far water", sand: "Dry sand, at the top", stripes: "First stripe" }[it.material] || "Color"), type: "color" },
         { key: "colors.1", label: (it) => ({ gradient: "Bottom color", water: "Near water", sand: "Wet sand, at the bottom", stripes: "Second stripe", cardboard: "Flecks" }[it.material] || "Tip color"), type: "color",
@@ -235,6 +324,7 @@
         { key: "puff", label: "Puff (rounded, lit from top left)", type: "range", ...pct, fallback: 0.3 },
         { key: "shadow", label: "Cast shadow", type: "range", ...pct, fallback: 0 },
         ...SPECK_FIELDS(BEAD_DEFAULT),
+        ...BOIL_FIELDS(L, (it) => it.shape === "mask" || it.material === "photo"),
       );
     } else if (item.el === "image") {
       f.push(
@@ -245,6 +335,7 @@
           set: (it, v) => { const im = ED.doc.images[it.image]; it.w = v; it.h = (v * im.h) / im.w; } },
         { key: "tint", label: "Tint toward color", type: "range", ...pct, fallback: 0 },
         { key: "tintColor", label: "Tint color", type: "color", fallback: "#FFFFFF" },
+        ...BOIL_FIELDS(L, () => true),
       );
     } else if (item.el === "canopy") {
       f.push({ type: "heading", label: "Foliage" },
@@ -291,9 +382,17 @@
       { key: "opacity", label: "Opacity", type: "range", ...pct, fallback: 1 },
       { type: "heading", label: "Motion" },
     ];
-    if (L.cycle) {
-      const secs = Math.round((L.cycle.frames / L.cycle.rate) * 100) / 100;
-      f.push({ type: "note", label: `Pose cycle: ${L.cycle.frames} poses at ${L.cycle.rate} a second, ${secs} seconds round, so it plays ${Math.round((LB.LOOP * L.cycle.rate) / L.cycle.frames)} times a loop. Pieces with poses step between them.` });
+    if (!L.type && !(L.anim && L.anim.type === "cycle")) {
+      f.push(
+        { key: "cycle.frames", label: "Poses (stop-motion frames)", type: "select", numeric: true,
+          options: opts([["0", "None: the layer holds still"], ["2", "2 poses"], ["3", "3 poses"], ["4", "4 poses"], ["6", "6 poses"], ["8", "8 poses"], ["12", "12 poses"]]),
+          get: (l) => String(l.cycle ? l.cycle.frames : 0), set: (l, v) => ACT().applyCycle(l, v, l.cycle && l.cycle.rate),
+          hint: "Each pose is a separate arrangement of the layer's pieces, swapped on the beat, the way stop motion is shot." },
+        { key: "cycle.rate", label: "Poses per second", type: "select", numeric: true, when: (l) => !!l.cycle,
+          options: (l) => ACT().validRates(l.cycle.frames).map((r) => [String(r), `${r} a second (${Math.round((l.cycle.frames / r) * 100) / 100} s round)`]),
+          get: (l) => String(l.cycle.rate), set: (l, v) => (l.cycle.rate = v),
+          hint: "Only rates that fit the 6-second loop a whole number of times are offered." },
+      );
     }
     if (L.anim && L.anim.type === "cycle") {
       f.push({ type: "note", label: `Cycles ${L.anim.frames} baked frames at ${L.anim.rate} per second.` });
@@ -382,6 +481,17 @@
         h("button", { type: "button", class: "btn-small", text: "Backward", title: "Send backward within the layer", onclick: () => ACT().restack(-1) }),
         h("button", { type: "button", class: "btn-small danger", text: "Delete", onclick: () => ACT().remove() }));
       sec.append(actions);
+      const extra = h("div", { class: "prop-actions" });
+      if (item.el === "shape" && item.shape === "path") {
+        extra.append(h("button", { type: "button", class: "btn-small", "aria-pressed": String(!!ED.pointEdit), text: ED.pointEdit ? "Done editing points" : "Edit points",
+          title: "Or double-click the outline on the canvas", onclick: () => { ED.emit("edit-points"); renderProps(); } }));
+      }
+      if (item.el === "image") {
+        extra.append(h("button", { type: "button", class: "btn-small", text: "Turn into a cut-out", title: "Use the picture's outline as a shape, with a handmade edge, puff and shadow",
+          onclick: () => ACT().toCutout() }));
+      }
+      if (!item.shader) extra.append(h("button", { type: "button", class: "btn-small", text: "Save to My pieces", onclick: () => ACT().savePiece("item") }));
+      sec.append(extra);
       const others = ED.doc.layers.filter((l) => !l.type && l.id !== L.id);
       if (others.length) {
         const id = "move-to";
@@ -397,6 +507,7 @@
     const lsec = h("section", { class: `prop-section${item ? " is-secondary" : ""}`, "aria-labelledby": "layer-h" });
     lsec.append(h("h2", { class: "pane-title", id: "layer-h", text: item ? `Layer: ${L.name}` : L.name }));
     if (L.locked) lsec.append(h("p", { class: "pane-note", text: "This layer is locked, so it can't be moved on the canvas. Its settings still work here." }));
+    if (!(L.paint || []).some((it) => it.shader)) lsec.append(h("div", { class: "prop-actions" }, h("button", { type: "button", class: "btn-small", text: "Save layer to My pieces", onclick: () => ACT().savePiece("layer") })));
     const lbody = h("div");
     lsec.append(lbody);
     pane.append(lsec);
@@ -541,6 +652,16 @@
     });
     ED.on("names", renderLayers);
     ED.on("images", renderStore);
+    ED.on("pieces", async (e) => { await loadPieces(); if (e && e.open) storeCat = "pack:" + e.open; else if (!e) storeCat = storeCat; renderStore(); });
+    ED.on("point-edit", () => { if (ED.selItem()) renderProps(); });
+    ED.on("pose", () => { if (ED.selLayer() && ED.selLayer().cycle) renderProps(); });
+    loadPieces().then(renderStore);
+    $("#file-pack").addEventListener("change", (e) => { if (e.target.files[0]) ACT().importPack(e.target.files[0]); e.target.value = ""; });
+    $("#pack-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      $("#dlg-pack").close();
+      ACT().exportPack({ name: $("#pack-name").value.trim(), author: $("#pack-author").value.trim(), license: $("#pack-license").value });
+    });
     ED.on("restore", () => { renderLook(); renderProps(); });
     ED.on("focus-field", () => { ED.showTab("props"); const f = document.querySelector("#pane-props input[type=text]"); if (f) { f.focus(); f.select(); } });
     ED.on("select", () => { if (ED.sel.layer) ED.showTab("props"); });

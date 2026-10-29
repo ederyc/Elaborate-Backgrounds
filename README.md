@@ -10,7 +10,7 @@ Looping stop-motion backgrounds in the browser, in two parts:
 
 **The study is a study.** The original backdrop was made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it. The study's art is entirely procedural (shader code, no images), written by Claude at my direction. So are the editor's starter pieces, which say so in the store, and the Beach day sample, which Claude built from the editor's own pieces. My own scenes and materials, photographed and drawn by me, come next and are the actual portfolio piece.
 
-Status: phases 1 to 4 are done (analysis, rendering skeleton, the study, and the first version of the editor). The plan for the rest, including the store and 3D pieces, is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
+Status: phases 1 to 5 are done: the analysis, the rendering skeleton, the study, the first version of the editor, and the customizer and store (drawing and editing outlines, animating pose by pose, cut-outs from photos, real boil, My pieces and packs). The plan for the rest, including the store and 3D pieces, is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
 
 ## Running it
 
@@ -39,9 +39,14 @@ The first time, it opens the Beach day sample. **New** starts from a blank backd
 
 - **Select and move.** Click a piece to select it, then drag it. Drag the square handle to scale and the round one to rotate (Shift snaps to 15°). Select a layer in the list and drag inside its dashed box to move the whole layer.
 - **Draw.** Pick a shape tool (R rectangle, E ellipse, T triangle, S star, C cloud) and drag on the canvas. New pieces go into the selected layer, or into a new layer if none can take them.
+- **Your own outlines.** The pen tool (P) places points: click the first point, double-click or press Enter to close the shape. Double-click a custom outline, or press Enter with the canvas focused, to edit its points. Drag a point to move it, drag a + to add one, and Alt-click a point to remove it. From the keyboard, [ and ] pick a point, the arrows move it, + adds one after it and Delete removes it. "Smooth curves" in Properties rounds the outline.
+- **Animate.** Give a layer poses in Properties (2 to 12, at a rate that fits the loop). Pose buttons appear under the canvas, and , and . step through them. With **This pose only** on, moving, scaling or rotating a piece changes just the pose on screen. **Onion skin** shows the previous pose faintly, **Copy previous pose** starts a new pose from the last one, and a piece can be hidden in single poses.
+- **Cut-outs from photos.** Import a photo of a paper shape, select it, and use **Turn into a cut-out**. The editor guesses whether the shape is dark on light, light on dark, or a see-through PNG. You can change that, and move where the edge falls, with the Cut out settings under Shape. It then gets a handmade edge, puff and shadow like any shape.
+- **Real boil.** On a picture or cut-out, pick a second and third photo of the same object under Boil photos. They swap on the beat.
 - **Store.** Click a piece to add it in the middle of the frame, or drag it to a spot. **Import picture**, or dropping image files on the canvas, adds your own pictures. A shape's material can also be **Photo**, which fills it with one of them.
+- **My pieces and packs.** **Save to My pieces** (for a piece) or **Save layer to My pieces** keeps it in this browser, under My pieces in the store. **Save as a pack** writes them all to one file with your name and a license line. **Install a pack** adds someone else's pack as its own store group.
 - **Properties** has everything about the selected piece and its layer. **Look** has the beat rate, boil, grade and each post pass.
-- **Keys.** Ctrl+Z and Ctrl+Shift+Z undo and redo. Ctrl+S saves the scene file, Ctrl+D duplicates and Space plays or pauses. On the canvas, the arrows move the selection (add Shift to move further), Delete removes it and Escape deselects. [ and ] move it backward or forward.
+- **Keys.** Ctrl+Z and Ctrl+Shift+Z undo and redo. Ctrl+S saves the scene file, Ctrl+D duplicates and Space plays or pauses. On the canvas, the arrows move the selection (add Shift to move further), Delete removes it and Escape deselects. [ and ] move it backward or forward. , and . step through poses.
 - **Saving.** The scene autosaves in this browser. **Save file** downloads a .json scene file (format in [docs/SCENE-FORMAT.md](docs/SCENE-FORMAT.md)), with your pictures embedded. **Export** saves a PNG at desktop or phone sizes, or records a 6-second video loop.
 
 ## Quality checks
@@ -52,7 +57,9 @@ Measured in Chrome 156 on this laptop (Intel Iris Xe, integrated graphics), driv
 | --- | --- |
 | The study, before and after the editor's engine changes | Same pixels at `?t=2.5`: largest difference 1 of 255, except where the new "Make your own" link sits in the caption |
 | Editor ready, study scene loaded | 1.1 to 1.3 s (three runs, before Beach day) |
-| Editor ready, Beach day loaded | 2.4 to 2.6 s (three runs): 1.6 s compiling the shape shader, about 90 ms baking 125 textures |
+| Editor ready, Beach day loaded | 2.8 s (two runs): 1.8 s compiling the shape shader, 70 to 80 ms baking 125 textures. It was 2.4 to 2.6 s before cut-outs and smooth outlines. |
+| Phase 5, scripted end to end | Pen outline of 5 points; point drag, Alt-click removal, keyboard add and move; smoothing; 4 poses with a move in pose 2 only, copy previous pose and onion skin; a photographed paper star turned into a cut-out (guessed "dark on light"); boil photos; save to My pieces, export a pack, delete, reinstall and add from it. All behaved as described. A file that isn't a pack was refused with a message. |
+| Cut-out click testing | A red disc of radius 0.12: hit at 0.11 from its center, missed at 0.14 and in the empty corner |
 | Beach day texture memory | About 78 MB at a 900 px tall bake (this test window). A 1080p screen bakes denser, so expect about 1.8 times that. |
 | Beach day, a new beat | 0.2 ms median, 0.3 ms p95 to draw (30 beats, 976×549 canvas) |
 | Beach day file round trip | Identical text, no warnings, 436 KB |
@@ -60,14 +67,14 @@ Measured in Chrome 156 on this laptop (Intel Iris Xe, integrated graphics), driv
 | Rebake after moving one of 25 shapes in one layer | 0.5 to 1.7 ms |
 | Scene file round trip (save, open, save) | Identical text |
 | Video loop, 1280×720 | MP4, 5.94 to 5.96 s long (six runs): the last beat is about 50 ms short, so a looping player shows a tiny hitch. Frame-exact export is planned (PLAN.md, phase 7). |
-| axe-core 4.10 scan, editor | No violations with nothing selected, a piece selected, the Look tab, and the Export dialog; again in Beach day with a gull layer and one of the girl's pieces selected |
+| axe-core 4.10 scan, editor | No violations with nothing selected, a piece selected, the Look tab, and the Export dialog; again in Beach day with a gull layer and one of the girl's pieces selected; and with an installed pack open, and with the pose strip showing |
 | axe-core 4.10 scan, study page | No violations |
 | Reduced motion | The editor doesn't autoplay; the play button reads "Play" |
 | Width 420 px | No sideways scrolling; canvas first, then the panels |
 
 Keyboard: every control in the panels is a native button, input or select with a visible label, and the canvas takes the arrow keys when focused. Moving pieces precisely without a mouse goes through the Placement sliders. The handles themselves need a mouse or touch.
 
-Not measured yet: Lighthouse, frame times on a phone, and touch use. Handles are 12 px, which is small for fingers.
+Not measured yet: Lighthouse, frame times on a phone, and touch use. Handles are 12 px and outline points 10 px, which is small for fingers.
 
 ## Code tour
 

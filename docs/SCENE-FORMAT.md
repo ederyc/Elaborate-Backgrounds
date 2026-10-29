@@ -101,7 +101,7 @@ In a layer with a pose cycle, a piece can list `poses`, one per frame. Each pose
 
 | Field | Meaning |
 | --- | --- |
-| `shape` | `rect` (with `corner`, 0 to 1), `ellipse`, `polygon` (with `sides`, and `star` 0 to 1), `blob` (with `lobes`: [x, y, radius] circles blended together, and `merge`), or `path`: a custom outline through up to 32 `points` around the piece's center, with `round` to soften its corners |
+| `shape` | `rect` (with `corner`, 0 to 1), `ellipse`, `polygon` (with `sides`, and `star` 0 to 1), `blob` (with `lobes`: [x, y, radius] circles blended together, and `merge`), `path`: a custom outline through up to 32 `points`, with `round` to soften its corners and `smooth: true` to draw a curve through them, or `mask`: a cut-out taken from a picture (below) |
 | `w`, `h` | Size, for everything but blobs |
 | `material` | `paper`, `felt`, `clay`, `foliage` (second color = tips), `cardboard` (second color = flecks), `gradient` (top and bottom colors), `water` (far and near colors, with ripple strokes), `sand` (dry and wet colors), `stripes` (below), or `photo` (with `image`, `tile` and `tint`) |
 | `stripes` | For the stripes material: `{ "width": 0.03 }` for straight bands, or `{ "fan": true, "count": 10, "center": [x, y] }` for stripes fanning out from a point, like a beach umbrella |
@@ -111,6 +111,16 @@ In a layer with a pose cycle, a piece can list `poses`, one per frame. Each pose
 | `puff` | How much the piece rounds over and catches the light, 0 to 1 |
 | `shadow` | A soft shadow cast down and right, away from the top-left light, 0 to 1 |
 | `specks` | Optional beads or tiny flowers |
+| `boilImages` | For a cut-out or a photo-filled shape: one or two more pictures, swapped pose by pose (the layer needs a pose cycle; the editor adds one) |
+
+**Cut-outs** use a picture as the outline:
+
+```json
+{ "el": "shape", "shape": "mask", "image": "img-x1y2z", "w": 0.4, "h": 0.4,
+  "mask": { "from": "dark", "threshold": 0.5 }, "material": "photo", "puff": 0.35, "shadow": 0.45 }
+```
+
+`from` is `dark` (a dark shape on a light background, like paper on white), `light`, or `alpha` (the opaque parts of a PNG). `threshold` (0 to 1) moves where the edge falls. When the material is `photo`, the cut-out shows its own picture edge to edge. The renderer turns the picture into a distance field when it loads (at most 256 px across), so the edge can be roughened, puffed and shadowed like any outline.
 
 **Images**: `{ "el": "image", "image": "img-x1y2z", "w": 0.4, "h": 0.3, "tint": 0, "tintColor": "#FFFFFF" }`.
 
@@ -127,6 +137,24 @@ Imported pictures are embedded, so a scene file works on its own:
 ```
 
 Pictures are shrunk to at most 2048 px on the long side when imported. Photos stay JPEG, and anything that might have transparency stays PNG. Saving drops pictures nothing uses.
+
+## Packs
+
+A pack is a file of pieces that the store can install (**Install a pack** under My pieces):
+
+```json
+{
+  "format": "elaborate-backgrounds/pack", "version": 1,
+  "name": "Handmade materials", "author": "Your name", "license": "CC BY 4.0 (use and change, with credit)",
+  "pieces": [
+    { "id": "piece-ab12c", "name": "Felt leaf", "kind": "item", "data": { "el": "shape", "...": "..." },
+      "images": { "img-x1y2z": { "name": "green felt", "src": "data:image/jpeg;base64,...", "w": 1024, "h": 1024 } },
+      "thumb": "data:image/png;base64,..." }
+  ]
+}
+```
+
+`kind` is `item` (one piece, placed so its center lands where it's dropped) or `layer` (a whole layer, moved with its offset). Each piece carries the pictures it uses. On install, every piece goes through the same checks as a scene file, and pieces that can't be drawn are left out with a message. When a piece is added to a scene, its pictures are added too, and a picture whose id is taken by a different picture gets a new id.
 
 ## Look
 

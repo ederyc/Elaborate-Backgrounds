@@ -42,6 +42,7 @@
       <button type="button" class="icon-btn" data-tool="triangle" aria-pressed="false" title="Draw a triangle (T)" aria-label="Draw a triangle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/></svg></button>
       <button type="button" class="icon-btn" data-tool="star" aria-pressed="false" title="Draw a star (S)" aria-label="Draw a star"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>
       <button type="button" class="icon-btn" data-tool="cloud" aria-pressed="false" title="Draw a cloud (C)" aria-label="Draw a cloud"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6-1A4.5 4.5 0 0 1 17.5 18z"/></svg></button>
+      <button type="button" class="icon-btn" data-tool="pen" aria-pressed="false" title="Draw your own outline, point by point (P)" aria-label="Draw your own outline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l3-9 6-6 6 6-6 6z"/><circle cx="12.5" cy="11.5" r="1.6"/><path d="M4 20l6.5-6.5"/></svg></button>
     </div>
     <div class="group" role="group" aria-label="Preview shape">
       <button type="button" class="tb-btn" data-preview="desktop" aria-pressed="true">Desktop</button>
@@ -97,6 +98,16 @@
       <output id="beat-readout" for="scrub">Beat 1 of 72</output>
       <p id="status" class="status" role="status" aria-live="polite"></p>
     </div>
+    <div class="pose-strip" id="pose-strip" hidden>
+      <span class="pose-label" id="pose-label">Poses</span>
+      <div class="pose-buttons" id="pose-buttons" role="group" aria-labelledby="pose-label"></div>
+      <div class="group" role="group" aria-label="Moving a piece changes">
+        <button type="button" class="tb-btn" data-pose-mode="all" aria-pressed="true" title="Moving a piece moves it in every pose">All poses</button>
+        <button type="button" class="tb-btn" data-pose-mode="pose" aria-pressed="false" title="Moving a piece changes only the pose on screen">This pose only</button>
+      </div>
+      <label class="pose-check"><input type="checkbox" id="onion"> Onion skin</label>
+      <button type="button" class="btn-small" id="btn-copy-pose" title="Make this pose match the one before it">Copy previous pose</button>
+    </div>
   </section>
 
   <aside class="panel panel-right" aria-label="Properties and look">
@@ -128,6 +139,25 @@
   </div>
   <div class="dlg-actions"><button type="button" class="btn-small" data-close>Cancel</button></div>
 </dialog>
+
+<dialog id="dlg-pack" aria-labelledby="dlg-pack-h">
+  <h2 id="dlg-pack-h">Save My pieces as a pack</h2>
+  <p>A pack is one file with your pieces and their pictures. Anyone can install it from the store.</p>
+  <form id="pack-form" method="dialog">
+    <div class="field field-text"><label for="pack-name">Pack name</label><input id="pack-name" type="text" maxlength="60" required value="My pieces"></div>
+    <div class="field field-text"><label for="pack-author">Your name, for the credit</label><input id="pack-author" type="text" maxlength="60" autocomplete="name"></div>
+    <div class="field field-select"><label for="pack-license">How others may use it</label>
+      <select id="pack-license">
+        <option>Free to use; please credit me</option>
+        <option>CC BY 4.0 (use and change, with credit)</option>
+        <option>CC0 (no rights reserved)</option>
+        <option>Personal use only</option>
+      </select>
+    </div>
+    <div class="dlg-actions"><button type="button" class="btn-small" data-close>Cancel</button><button type="submit" class="btn-small primary">Save pack</button></div>
+  </form>
+</dialog>
+<input type="file" id="file-pack" accept=".json,application/json" hidden>
 
 <dialog id="dlg-export" aria-labelledby="dlg-export-h">
   <h2 id="dlg-export-h">Export</h2>

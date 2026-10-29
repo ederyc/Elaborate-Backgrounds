@@ -44,9 +44,11 @@ Open question: **a name for the things people make.** Options, with my recommend
 
 Each phase ends with a stop for your review, as before.
 
-### 5. The customizer and the store, properly
+### 5. The customizer and the store, properly (built)
 
 The goal: a person can make a piece once and reuse it, and the store can grow without code changes.
+
+Built, following recommendation 1 below (a free library that reads pack files): the pen tool and point editing, smooth outlines, pose cycles you can make and edit pose by pose (with onion skin), cut-outs from photos, boil photos, My pieces, and pack export and install. Not done: the built-in starter pieces are still code rather than a pack file (they're credited the same way), and the "Handmade materials" pack waits on your photos.
 
 - **Draw your own outline.** Click points to make a closed shape, with smooth or sharp corners. It's stored as points, so it stays editable.
 - **Masks from pictures.** Photograph a paper cut-out on white, import it, and use it as a shape's outline, filled with any material. This is the hybrid from [ASSETS.md](ASSETS.md) (hand-made masks plus photographed materials) inside the editor.

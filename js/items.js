@@ -83,10 +83,16 @@
     const q = toLocal(item, layer, p);
     const b = outlineBox(item, layer);
     if (q[0] < b[0] || q[0] > b[2] || q[1] < b[1] || q[1] > b[3]) return false;
+    if (item.el === "shape" && item.shape === "mask") {
+      const m = LB.maskInfo && LB.maskInfo(LB.ELEMENTS.shape.maskKey(item));
+      if (!m) return true;
+      const u = (q[0] - b[0]) / (b[2] - b[0]), v = (q[1] - b[1]) / (b[3] - b[1]);
+      return !!m.bin[Math.min(m.h - 1, Math.floor(v * m.h)) * m.w + Math.min(m.w - 1, Math.floor(u * m.w))];
+    }
     if (item.el === "shape" && item.shape === "path" && item.points) {
       // Even-odd test against the outline.
       let inside = false;
-      const ps = item.points;
+      const ps = LB.ELEMENTS.shape.pathPoints(item);
       for (let i = 0, j = ps.length - 1; i < ps.length; j = i++) {
         if ((ps[i][1] > q[1]) !== (ps[j][1] > q[1]) && q[0] < ((ps[j][0] - ps[i][0]) * (q[1] - ps[i][1])) / (ps[j][1] - ps[i][1]) + ps[i][0]) inside = !inside;
       }
@@ -109,6 +115,11 @@
 
   // The item as it stands in pose f (unchanged when it has no poses).
   function atPose(item, f) {
+    // Boil photos swap pose by pose, whether or not the item has poses of its own.
+    if (item.boilImages && item.boilImages.length && item.image) {
+      const all = [item.image, ...item.boilImages];
+      item = { ...item, image: all[((f % all.length) + all.length) % all.length] };
+    }
     if (!item.poses || !item.poses.length) return item;
     const p = item.poses[((f % item.poses.length) + item.poses.length) % item.poses.length] || {};
     const t = xfOf(item);

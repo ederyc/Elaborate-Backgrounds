@@ -40,6 +40,8 @@
   function postFor(doc) {
     const p = LB.DOC.clone(doc.post);
     p.motion = true;
+    // Onion skin: the selected layer's previous pose, faint, under the current one.
+    p.onion = ED.onion && ED.sel.layer ? ED.sel.layer : null;
     p.boil = doc.boil;
     p.haze = 1;
     p.hidden = {};
@@ -121,7 +123,54 @@
     schedule();
   }
 
+  // ---------- poses under the canvas ----------
+  ED.onion = false;
+  let poseKey = "";
+  // The first beat of the loop on which a layer shows pose f.
+  function beatOfPose(L, f) {
+    const beats = Math.round(LB.LOOP * clock.fps);
+    for (let b = 0; b < beats; b++) if (Math.floor((b / clock.fps) * L.cycle.rate + 1e-6) % L.cycle.frames === f) return b;
+    return 0;
+  }
+  function goToPose(L, f) {
+    setPlaying(false);
+    clock.set(beatOfPose(L, f) / clock.fps + 1e-4);
+    redraw();
+    ED.emit("pose");
+  }
+  ED.stepPose = (step) => {
+    const L = ED.selLayer();
+    if (!L || !L.cycle) return false;
+    goToPose(L, (renderer.frameOf(L.id, clock) + step + L.cycle.frames) % L.cycle.frames);
+    return true;
+  };
+  function updatePoseStrip() {
+    const L = ED.selLayer();
+    const strip = $("#pose-strip");
+    const on = !!(L && L.cycle);
+    strip.hidden = !on;
+    if (!on) { poseKey = ""; return; }
+    const f = renderer.frameOf(L.id, clock);
+    const key = `${L.id}/${L.cycle.frames}/${L.name}`;
+    if (key !== poseKey) {
+      poseKey = key;
+      $("#pose-label").textContent = `Poses of ${L.name}`;
+      const box = $("#pose-buttons");
+      box.innerHTML = "";
+      for (let i = 0; i < L.cycle.frames; i++) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = String(i + 1);
+        b.setAttribute("aria-label", `Pose ${i + 1}`);
+        b.addEventListener("click", () => goToPose(ED.selLayer(), i));
+        box.append(b);
+      }
+    }
+    [...$("#pose-buttons").children].forEach((b, i) => b.setAttribute("aria-pressed", String(i === f)));
+  }
+
   function updateTransport() {
+    updatePoseStrip();
     const beats = Math.round(LB.LOOP * clock.fps);
     const scrub = $("#scrub");
     scrub.max = beats - 1;
@@ -161,7 +210,7 @@
   }
 
   // ---------- shortcuts ----------
-  const TOOLS = { v: "select", r: "rect", e: "ellipse", t: "triangle", s: "star", c: "cloud" };
+  const TOOLS = { v: "select", r: "rect", e: "ellipse", t: "triangle", s: "star", c: "cloud", p: "pen" };
   function typing(t) {
     return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) && !(t.type === "range" || t.type === "checkbox" || t.type === "color");
   }
@@ -182,6 +231,8 @@
       return;
     }
     if (e.key === "[" || e.key === "]") { LB.ACT.restack(e.key === "]" ? 1 : -1); return; }
+    // , and . step through the selected layer's poses, like frame-by-frame in an animation program.
+    if ((e.key === "," || e.key === ".") && ED.stepPose(e.key === "." ? 1 : -1)) { e.preventDefault(); return; }
     if (TOOLS[k] && !e.shiftKey) ED.setTool(TOOLS[k]);
   }
 
@@ -227,10 +278,18 @@
     $("#btn-undo").addEventListener("click", () => undo(-1));
     $("#btn-redo").addEventListener("click", () => undo(1));
     $("#btn-play").addEventListener("click", () => setPlaying(!ED.playing, true));
-    $("#scrub").addEventListener("input", (e) => { setPlaying(false); clock.set(+e.target.value / clock.fps + 1e-4); redraw(); });
+    $("#scrub").addEventListener("input", (e) => { setPlaying(false); clock.set(+e.target.value / clock.fps + 1e-4); redraw(); ED.emit("pose"); });
     $("#btn-import").addEventListener("click", () => $("#file-image").click());
     $("#file-image").addEventListener("change", (e) => { LB.ACT.importImages(e.target.files); e.target.value = ""; });
     document.addEventListener("keydown", onKey);
+    document.querySelectorAll("[data-pose-mode]").forEach((b) => b.addEventListener("click", () => {
+      ED.poseMode = b.dataset.poseMode;
+      document.querySelectorAll("[data-pose-mode]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      ED.emit("status", { msg: ED.poseMode === "pose" ? "Moving, scaling or rotating a piece now changes only the pose on screen." : "Moving a piece now moves it in every pose." });
+    }));
+    $("#onion").addEventListener("change", (e) => { ED.onion = e.target.checked; renderer.setPost(postFor(ED.doc)); redraw(); });
+    $("#btn-copy-pose").addEventListener("click", () => { const L = ED.selLayer(); if (L && L.cycle) LB.ACT.copyPreviousPose(L, renderer.frameOf(L.id, clock)); });
+    ED.on("select", () => { renderer.setPost(postFor(ED.doc)); updatePoseStrip(); redraw(); });
     document.addEventListener("visibilitychange", schedule);
     reduceMotion.addEventListener("change", (e) => { if (e.matches) setPlaying(false); });
 

@@ -78,6 +78,7 @@
     },
 
     addFromEntry(entry, at) {
+      if (entry.piece) return ACT.addPiece(entry.piece, at || ED.viewCenter());
       const made = LB.LIBRARY.make(entry, at);
       if (made.item) ACT.addItem(made.item, `Add ${entry.name}`);
       else {
@@ -205,8 +206,9 @@
       const item = ED.selItem();
       const fn = () => {
         if (item) {
-          const t = I().xfOf(item);
-          item.xf = { ...t, x: t.x + dx, y: t.y + dy };
+          const f = ED.renderer.frameOf(L.id, ED.clock);
+          const t = I().atPose(item, f).xf;
+          ACT.setPosedXf(item, L, { ...t, x: t.x + dx, y: t.y + dy }, f);
         } else {
           const o = L.offset || [0, 0];
           L.offset = [o[0] + dx, o[1] + dy];
@@ -246,6 +248,265 @@
         }
       }
     },
+  };
+
+  // ======================= poses =======================
+  // "all": moving a piece moves every pose. "pose": it changes only the pose on screen.
+  ED.poseMode = "all";
+  const r5 = (v) => Math.round(v * 1e5) / 1e5;
+  const validRates = (frames) => [1, 2, 3, 4, 6, 8, 12].filter((r) => Math.abs((LB.LOOP * r) / frames - Math.round((LB.LOOP * r) / frames)) < 1e-9);
+  const DEFAULT_RATE = { 2: 2, 3: 3, 4: 4, 6: 6, 8: 4, 12: 6 };
+  const padPoses = (poses, n) => {
+    const out = (poses || []).slice(0, n);
+    while (out.length < n) out.push({});
+    return out;
+  };
+  const tidyPoses = (item) => {
+    if (item.poses && item.poses.every((p) => !Object.keys(p).length)) delete item.poses;
+  };
+
+  Object.assign(ACT, {
+    validRates,
+
+    // Puts an item where "nx" says, as seen in pose f: in its own transform, or only in that pose.
+    setPosedXf(item, L, nx, f) {
+      const base = I().xfOf(item);
+      if (ED.poseMode === "pose" && L.cycle) {
+        item.poses = padPoses(item.poses, L.cycle.frames);
+        const p = { ...item.poses[f] };
+        delete p.x; delete p.y; delete p.r; delete p.s;
+        const dx = r5(nx.x - base.x), dy = r5(nx.y - base.y), dr = r5(nx.r - base.r), ds = r5(nx.s / base.s);
+        if (dx) p.x = dx;
+        if (dy) p.y = dy;
+        if (dr) p.r = dr;
+        if (ds !== 1) p.s = ds;
+        item.poses[f] = p;
+        tidyPoses(item);
+      } else {
+        const cur = I().atPose(item, f).xf;
+        item.xf = { x: base.x + (nx.x - cur.x), y: base.y + (nx.y - cur.y), s: base.s * (nx.s / cur.s), r: base.r + (nx.r - cur.r) };
+      }
+    },
+
+    // Gives a layer a pose cycle (or removes it with frames = 0), keeping each piece's poses that still fit.
+    applyCycle(L, frames, rate) {
+      if (!frames) {
+        delete L.cycle;
+        (L.paint || []).forEach((it) => delete it.poses);
+        return;
+      }
+      const rates = validRates(frames);
+      L.cycle = { frames, rate: rates.includes(rate) ? rate : DEFAULT_RATE[frames] || rates[0] };
+      (L.paint || []).forEach((it) => { if (it.poses) { it.poses = padPoses(it.poses, frames); tidyPoses(it); } });
+    },
+
+    setCycle(L, frames, rate) {
+      ED.change(() => ACT.applyCycle(L, frames, rate), frames ? `${frames} poses` : "Remove poses");
+      say(frames ? `${L.name} now has ${frames} poses at ${L.cycle.rate} a second. Pick a pose under the canvas, set "This pose only", and move pieces to animate.` : `Removed the poses from ${L.name}.`);
+    },
+
+    // Copies every piece's pose from the previous pose onto pose f.
+    copyPreviousPose(L, f) {
+      if (!L.cycle) return;
+      const n = L.cycle.frames, prev = (f - 1 + n) % n;
+      ED.change(() => (L.paint || []).forEach((it) => {
+        it.poses = padPoses(it.poses, n);
+        it.poses[f] = D().clone(it.poses[prev]);
+        tidyPoses(it);
+      }), "Copy previous pose");
+      say(`Pose ${f + 1} now matches pose ${prev + 1}.`);
+    },
+
+    setHiddenInPose(item, L, f, hide) {
+      ED.change(() => {
+        item.poses = padPoses(item.poses, L.cycle.frames);
+        if (hide) item.poses[f] = { ...item.poses[f], hide: true };
+        else { const p = { ...item.poses[f] }; delete p.hide; item.poses[f] = p; }
+        tidyPoses(item);
+      }, hide ? "Hide in pose" : "Show in pose");
+    },
+
+    // Boil photos: 1 or 2 more photos of the same thing, swapped pose by pose.
+    setBoil(item, L, list) {
+      const extra = list.filter(Boolean).slice(0, 2);
+      ED.change(() => {
+        if (extra.length) item.boilImages = extra;
+        else delete item.boilImages;
+        if (extra.length && !L.cycle) L.cycle = { frames: extra.length + 1, rate: 6 };
+      }, "Boil photos");
+      if (extra.length) say(`${extra.length + 1} photos now swap on the beat in ${L.name}.`);
+    },
+  });
+
+  // ======================= drawing your own outline =======================
+  ACT.penShape = function (points) {
+    const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+    const c = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+    const style = ED.shapeStyle || { material: "paper", rough: 0.5, fuzz: 0.3, puff: 0.3, shadow: 0.4, grain: 1 };
+    const item = { el: "shape", ...D().clone(style), shape: "path", smooth: false, round: 0.002,
+      points: points.slice(0, 32).map((p) => [r5(p[0] - c[0]), r5(p[1] - c[1])]),
+      colors: [PALETTE[paletteIndex++ % PALETTE.length], style.colors ? style.colors[1] : "#FFFFFF"], xf: { x: c[0], y: c[1], s: 1, r: 0 } };
+    if (item.material === "photo") item.material = "paper";
+    delete item.image;
+    ACT.addItem(item, "Draw an outline");
+  };
+
+  // ======================= cut-outs from pictures =======================
+  // Looks at a picture to guess what the cut-out is: see-through parts, or a dark shape on a light
+  // background (paper on white), or a light shape on a dark one.
+  async function guessMask(src) {
+    const img = await new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = reject; im.src = src; });
+    const c = document.createElement("canvas");
+    c.width = 64; c.height = 64;
+    const x = c.getContext("2d", { willReadFrequently: true });
+    x.drawImage(img, 0, 0, 64, 64);
+    const px = x.getImageData(0, 0, 64, 64).data;
+    let clear = 0, edge = 0, edgeN = 0;
+    for (let i = 0; i < 64 * 64; i++) {
+      if (px[i * 4 + 3] < 200) clear++;
+      const xx = i % 64, yy = Math.floor(i / 64);
+      if (xx < 3 || yy < 3 || xx > 60 || yy > 60) { edge += (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255; edgeN++; }
+    }
+    if (clear > 64 * 64 * 0.05) return "alpha";
+    return edge / edgeN > 0.5 ? "dark" : "light";
+  }
+  ACT.toCutout = async function () {
+    const L = ED.selLayer(), item = ED.selItem();
+    if (!item || item.el !== "image") return;
+    const def = ED.doc.images[item.image];
+    let from = "alpha";
+    try { from = await guessMask(def.src); } catch {}
+    ED.change(() => {
+      const keep = { id: item.id, image: item.image, w: item.w, h: item.h, xf: item.xf, poses: item.poses, boilImages: item.boilImages, name: item.name };
+      for (const k of Object.keys(item)) delete item[k];
+      Object.assign(item, {
+        el: "shape", shape: "mask", mask: { from, threshold: 0.5 }, material: "photo", tint: 0, colors: ["#FFFFFF", "#FFFFFF"],
+        rough: 0.2, fuzz: 0.25, puff: 0.35, shadow: 0.45, grain: 1,
+      });
+      Object.keys(keep).forEach((k) => keep[k] !== undefined && (item[k] = keep[k]));
+    }, "Turn into a cut-out");
+    say(`It's a cut-out now, from the ${from === "alpha" ? "see-through parts" : from === "dark" ? "dark parts (paper on a light background)" : "light parts"} of the picture. If it guessed wrong, change Cut out under Shape.`);
+  };
+
+  // ======================= My pieces and packs =======================
+  // The pictures a piece uses, so it can travel on its own.
+  function picturesIn(data) {
+    const ids = new Set();
+    const visit = (it) => { if (it.image) ids.add(it.image); (it.boilImages || []).forEach((id) => ids.add(id)); };
+    if (data.paint) data.paint.forEach(visit); else visit(data);
+    return ids;
+  }
+  // Adds a piece's pictures to the scene, renaming any that clash, and returns the renaming.
+  function mergePictures(images) {
+    const map = {};
+    for (const [id, def] of Object.entries(images || {})) {
+      const have = ED.doc.images[id];
+      if (have && have.src === def.src) { map[id] = id; continue; }
+      const nid = have ? D().uid("img", new Set(Object.keys(ED.doc.images))) : id;
+      ED.doc.images[nid] = D().clone(def);
+      map[id] = nid;
+    }
+    return map;
+  }
+  function renamePictures(data, map) {
+    const fix = (it) => {
+      if (it.image && map[it.image]) it.image = map[it.image];
+      if (it.boilImages) it.boilImages = it.boilImages.map((id) => map[id] || id);
+    };
+    if (data.paint) data.paint.forEach(fix); else fix(data);
+  }
+
+  ACT.savePiece = async function (kind) {
+    const L = ED.selLayer(), item = ED.selItem();
+    if (!L || (kind === "item" && !item)) return;
+    const data = D().clone(kind === "item" ? item : L);
+    delete data.id;
+    if (data.paint) data.paint.forEach((it) => delete it.id);
+    const name = kind === "item" ? D().itemName(item, ED.doc) : L.name;
+    const images = {};
+    for (const id of picturesIn(data)) if (ED.doc.images[id]) images[id] = ED.doc.images[id];
+    let thumb = null;
+    try {
+      const layer = kind === "item" ? { id: "thumb", seed: 3, paint: [data] } : { ...data, id: "thumb", offset: [0, 0] };
+      const img = await ED.renderer.thumbnail(layer, 144, 96, { ...ED.doc });
+      if (img) {
+        const c = document.createElement("canvas");
+        c.width = img.width; c.height = img.height;
+        c.getContext("2d").putImageData(img, 0, 0);
+        thumb = c.toDataURL("image/png");
+      }
+    } catch {}
+    const piece = { id: D().uid("piece"), name, kind, data, images, thumb, credit: "Yours", created: Date.now() };
+    try {
+      await D().dbPut("pieces", piece.id, piece);
+      ED.emit("pieces");
+      say(`Saved ${name} to My pieces in the store.`);
+    } catch {
+      say("This browser blocked storage, so My pieces can't be saved here.", "error");
+    }
+  };
+
+  ACT.addPiece = function (piece, at) {
+    const data = D().clone(piece.data);
+    const map = mergePictures(piece.images);
+    renamePictures(data, map);
+    ED.emit("images");
+    if (piece.kind === "item") {
+      const t = I().xfOf(data);
+      const o = I().origin(data, null);
+      data.xf = { ...t, x: at[0] - o[0], y: at[1] - o[1] };
+      ACT.addItem(data, `Add ${piece.name}`);
+    } else {
+      // Center the layer's contents on "at".
+      let box = null;
+      if (data.type === "sprite") box = LB.SPRITE.bbox({ ...data, index: 0 });
+      else if (data.type === "sparkles") box = data.area;
+      else for (const it of data.paint || []) box = I().union(box, I().worldBox(I().atPose(it, 0), data));
+      const off = data.offset || [0, 0];
+      if (box) data.offset = [off[0] + at[0] - (box[0] + box[2]) / 2, off[1] + at[1] - (box[1] + box[3]) / 2];
+      (data.paint || []).forEach((it) => (it.id = D().uid("item")));
+      ACT.addLayerObject({ ...data, name: piece.name }, `Add ${piece.name}`);
+    }
+  };
+
+  ACT.deletePiece = async function (piece) {
+    await D().dbPut("pieces", piece.id, undefined);
+    ED.emit("pieces");
+    say(`Removed ${piece.name} from My pieces.`);
+  };
+
+  ACT.exportPack = async function (meta) {
+    const pieces = await D().dbAll("pieces");
+    if (!pieces.length) return say("My pieces is empty. Save a piece first: select it and use Save to My pieces.", "error");
+    const pack = { format: D().PACK_FORMAT, version: 1, id: D().uid("pack"), name: meta.name || "My pack", author: meta.author || "", license: meta.license || "",
+      pieces: pieces.map(({ id, name, kind, data, images, thumb }) => ({ id, name, kind, data, images, thumb })) };
+    const text = JSON.stringify(pack);
+    const slug = (pack.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "pack");
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `${slug}.pack.json`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    say(`Saved ${pieces.length} piece${pieces.length === 1 ? "" : "s"} as ${slug}.pack.json.`);
+  };
+
+  ACT.importPack = async function (file) {
+    try {
+      let raw;
+      try { raw = JSON.parse(await file.text()); } catch { throw new Error(`${file.name} isn't valid JSON.`); }
+      const { pack, warnings } = D().normalizePack(raw);
+      await D().dbPut("packs", pack.id, pack);
+      ED.emit("pieces", { open: pack.id });
+      say(`Installed ${pack.name}: ${pack.pieces.length} piece${pack.pieces.length === 1 ? "" : "s"}.${warnings.length ? " " + warnings.join(" ") : ""}`, warnings.length ? "warn" : undefined);
+    } catch (err) {
+      say(`Couldn't install that pack: ${err.message}`, "error");
+    }
+  };
+
+  ACT.removePack = async function (pack) {
+    await D().dbPut("packs", pack.id, undefined);
+    ED.emit("pieces");
+    say(`Removed the ${pack.name} pack. Scenes that use its pieces keep them.`);
   };
 
   LB.ACT = ACT;

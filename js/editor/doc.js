@@ -76,6 +76,10 @@
   function itemName(item, doc) {
     if (item.name) return item.name;
     if (item.shader) return `${titleCase(item.shader)} (study art)`;
+    if (item.el === "shape" && item.shape === "mask") {
+      const im = doc && doc.images[item.image];
+      return `Cut-out of ${im ? im.name : "a picture"}`;
+    }
     if (item.el === "shape") {
       const kind = item.shape === "polygon" && item.star > 0.05 ? "star" : item.shape === "polygon" && item.sides === 3 ? "triangle" : SHAPE_NAMES[item.shape] || "shape";
       if (item.material === "stripes") return `Striped ${kind}`;
@@ -204,9 +208,13 @@
           warnings.push(`A piece in "${L.name}" was left out: nothing draws "${item.shader || item.el}".`);
           return false;
         }
-        if ((item.el === "image" || (item.el === "shape" && item.material === "photo")) && !d.images[item.image]) {
-          if (item.el === "image") { warnings.push(`An image in "${L.name}" was left out: its picture is missing.`); return false; }
+        if ((item.el === "image" || (item.el === "shape" && (item.material === "photo" || item.shape === "mask"))) && !d.images[item.image]) {
+          if (item.el === "image" || item.shape === "mask") { warnings.push(`A picture piece in "${L.name}" was left out: its picture is missing.`); return false; }
           item.material = "paper";
+        }
+        if (item.boilImages) {
+          item.boilImages = item.boilImages.filter((id) => d.images[id]).slice(0, 2);
+          if (!item.boilImages.length) delete item.boilImages;
         }
         if (!item.id || itemIds.has(item.id)) item.id = uid("item", itemIds);
         itemIds.add(item.id);
@@ -313,10 +321,13 @@
 
   // ---------- autosave (IndexedDB; a scene with photos can be several MB) ----------
   const DB = "elaborate-backgrounds", STORE = "scenes", KEY = "current";
+  // Version 2 adds "pieces" (My pieces) and "packs" (installed pack files).
   function idb() {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+      const req = indexedDB.open(DB, 2);
+      req.onupgradeneeded = () => {
+        for (const name of [STORE, "pieces", "packs"]) if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
@@ -342,5 +353,66 @@
     return text ? normalize(JSON.parse(text)) : null;
   }
 
-  LB.DOC = { FORMAT, VERSION, A, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal };
+  // Simple key/value access to the other stores.
+  async function dbAll(store) {
+    const db = await idb();
+    const out = await new Promise((resolve, reject) => {
+      const tx = db.transaction(store);
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return out;
+  }
+  async function dbPut(store, key, value) {
+    const db = await idb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(store, "readwrite");
+      if (value === undefined) tx.objectStore(store).delete(key);
+      else tx.objectStore(store).put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }
+
+  // ---------- pieces and packs ----------
+  // A piece is { id, name, kind: "item" | "layer", data, images, thumb, credit }. A pack file is
+  // { format: PACK_FORMAT, version: 1, name, author, license, pieces: [...] } (docs/SCENE-FORMAT.md).
+  const PACK_FORMAT = "elaborate-backgrounds/pack";
+
+  // Runs a piece through the same checks as a scene file. Returns the cleaned piece, or null.
+  function normalizePiece(piece, warnings = []) {
+    if (!piece || typeof piece !== "object" || !piece.data || !["item", "layer"].includes(piece.kind)) return null;
+    const layer = piece.kind === "item" ? { id: "p", name: "piece", paint: [piece.data] } : { ...piece.data, id: "p" };
+    try {
+      const { doc, warnings: w } = normalize({ layers: [layer], images: piece.images || {} });
+      warnings.push(...w);
+      const L = doc.layers[0];
+      if (!L) return null;
+      if (piece.kind === "item" && !(L.paint && L.paint.length)) return null;
+      const data = piece.kind === "item" ? L.paint[0] : L;
+      delete data.id;
+      return {
+        id: String(piece.id || uid("piece")), name: String(piece.name || "Piece").slice(0, 60), kind: piece.kind, data,
+        images: doc.images, thumb: typeof piece.thumb === "string" && piece.thumb.startsWith("data:image/") ? piece.thumb : null,
+        credit: piece.credit ? String(piece.credit).slice(0, 120) : "",
+      };
+    } catch {
+      return null;
+    }
+  }
+  function normalizePack(raw) {
+    if (!raw || raw.format !== PACK_FORMAT || !Array.isArray(raw.pieces)) throw new Error("This file isn't a pack: it needs a format line and a list of pieces.");
+    const warnings = [];
+    const name = String(raw.name || "Untitled pack").slice(0, 60);
+    const author = raw.author ? String(raw.author).slice(0, 60) : "";
+    const pieces = raw.pieces.map((pc) => normalizePiece({ ...pc, credit: pc.credit || (author ? `From ${name}, by ${author}` : `From ${name}`) }, warnings)).filter(Boolean);
+    if (!pieces.length) throw new Error("None of the pieces in this pack could be drawn.");
+    return { pack: { id: String(raw.id || uid("pack")), name, author, license: raw.license ? String(raw.license).slice(0, 200) : "", pieces }, warnings };
+  }
+
+  LB.DOC = { FORMAT, VERSION, A, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal,
+    dbAll, dbPut, PACK_FORMAT, normalizePiece, normalizePack };
 })();

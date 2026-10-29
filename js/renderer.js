@@ -151,8 +151,10 @@ void main() {
 
     const progCache = new Map();  // bake program key -> compiled program
     const layerCache = new Map(); // layer id -> { sig, textures, texSize }
-    const imageCache = new Map(); // image id -> { tex, w, h }
+    const imageCache = new Map(); // image id -> { tex, w, h, img }
+    const maskCache = new Map();  // mask key -> { tex, w, h, bin }
     LB.imageInfo = (id) => imageCache.get(id);
+    LB.maskInfo = (key) => maskCache.get(key);
 
     // ---------- what each layer needs ----------
     const art = () => (scene.art && LB.art ? LB.art[scene.art] : null);
@@ -213,7 +215,9 @@ void main() {
           gl.bindTexture(gl.TEXTURE_2D, tex);
           gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, img);
-          imageCache.set(id, { tex, w: img.naturalWidth, h: img.naturalHeight, src });
+          imageCache.set(id, { tex, w: img.naturalWidth, h: img.naturalHeight, src, img });
+          // A changed picture means its cut-outs have to be rebuilt.
+          for (const k of [...maskCache.keys()]) if (k.startsWith(id + "|")) { gl.deleteTexture(maskCache.get(k).tex); maskCache.delete(k); }
           resolve();
         };
         img.onerror = () => reject(new Error(`Image "${id}" didn't load`));
@@ -233,6 +237,75 @@ void main() {
         jobs.push(loadImage(id, def.src));
       }
       await Promise.all(jobs);
+    }
+
+    // ---------- cut-outs from pictures ----------
+    // A picture becomes a signed distance field: which pixels count as "inside" (the dark parts, the
+    // light parts, or the opaque parts), then how far each pixel is from the edge, in pixels.
+    // Exact Euclidean distances, by Felzenszwalb and Huttenlocher's two-pass method.
+    function edt1(f, n, d, v, z) {
+      let k = 0;
+      v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+      for (let q = 1; q < n; q++) {
+        let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+        while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+        k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
+      }
+      k = 0;
+      for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+    }
+    function edt(grid, w, h) {
+      const n = Math.max(w, h), f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+      for (let x = 0; x < w; x++) {
+        for (let y = 0; y < h; y++) f[y] = grid[y * w + x];
+        edt1(f, h, d, v, z);
+        for (let y = 0; y < h; y++) grid[y * w + x] = d[y];
+      }
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) f[x] = grid[y * w + x];
+        edt1(f, w, d, v, z);
+        for (let x = 0; x < w; x++) grid[y * w + x] = d[x];
+      }
+    }
+    function buildMask(def) {
+      const info = imageCache.get(def.image);
+      if (!info) return;
+      const k = Math.min(1, 256 / Math.max(info.w, info.h));
+      const w = Math.max(2, Math.round(info.w * k)), h = Math.max(2, Math.round(info.h * k));
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      const x = c.getContext("2d", { willReadFrequently: true });
+      x.drawImage(info.img, 0, 0, w, h);
+      const px = x.getImageData(0, 0, w, h).data;
+      const bin = new Uint8Array(w * h);
+      for (let i = 0; i < w * h; i++) {
+        const a = px[i * 4 + 3] / 255;
+        const lum = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
+        const m = def.from === "dark" ? (1 - lum) * a : def.from === "light" ? lum * a : a;
+        bin[i] = m > def.threshold ? 1 : 0;
+      }
+      const BIG = 1e12;
+      const toIn = new Float64Array(w * h), toOut = new Float64Array(w * h);
+      for (let i = 0; i < w * h; i++) { toIn[i] = bin[i] ? 0 : BIG; toOut[i] = bin[i] ? BIG : 0; }
+      edt(toIn, w, h);
+      edt(toOut, w, h);
+      const data = new Uint8Array(w * h * 4);
+      for (let i = 0; i < w * h; i++) {
+        // Positive outside, negative inside, the edge halfway between pixels.
+        const dist = bin[i] ? -(Math.sqrt(toOut[i]) - 0.5) : Math.sqrt(toIn[i]) - 0.5;
+        const val = Math.max(0, Math.min(255, Math.round(128 + dist * 4)));
+        data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = val;
+        data[i * 4 + 3] = 255;
+      }
+      const tex = texture(gl, w, h, { data });
+      maskCache.set(def.key, { tex, w, h, bin });
+    }
+    function ensureMasks(list) {
+      for (const L of list) for (const item of L.paint || []) {
+        const E = item.el && LB.ELEMENTS[item.el];
+        if (!E || !E.masks) continue;
+        for (const def of E.masks(item)) if (!maskCache.has(def.key)) buildMask(def);
+      }
     }
 
     // ---------- programs ----------
@@ -272,6 +345,9 @@ void main() {
         const img = imgs.length && imageCache.get(imgs[0]);
         bindTex(gl, 0, img ? img.tex : whiteTex);
         gl.uniform1i(pr.u.uImage, 0);
+        const mask = item.el === "shape" && item.shape === "mask" ? maskCache.get(LB.ELEMENTS.shape.maskKey(item)) : null;
+        bindTex(gl, 1, mask ? mask.tex : whiteTex);
+        gl.uniform1i(pr.u.uMask, 1);
         let box = rect;
         if (item.sprite) LB.SPRITE.set(gl, pr.u, L);
         else if (item.el) {
@@ -343,6 +419,7 @@ void main() {
       const stale = list.filter((L) => L.type !== "sparkles" && !L.textures);
       if (stale.length) {
         await ensureImages(stale);
+        ensureMasks(stale);
         await ensurePrograms(stale.flatMap((L) => paintOf(L).map(progKey)));
         if (onProgress) onProgress(0.5);
         await bakeLayers(stale, onProgress);
@@ -501,8 +578,14 @@ void main() {
         gl.uniform2f(u.uBoilSeed, rand(seed * 3 + L.index) * 64, rand(seed * 5 + L.index + 0.5) * 64);
         gl.uniform2f(u.uBoilAmp, (amp * 2) / (x1 - x0), (amp * 2) / (y1 - y0));
         gl.uniform1f(u.uHazeAmt, (L.haze || 0) * post.haze);
+        const n = L.textures.length;
+        if (post.onion === L.id && n > 1) {
+          gl.uniform1f(u.uAlpha, (L.opacity ?? 1) * 0.35);
+          bindTex(gl, 0, L.textures[(pose.frame - 1 + n) % n]);
+          drawQuad();
+        }
         gl.uniform1f(u.uAlpha, L.opacity ?? 1);
-        bindTex(gl, 0, L.textures[Math.min(pose.frame, L.textures.length - 1)]);
+        bindTex(gl, 0, L.textures[Math.min(pose.frame, n - 1)]);
         drawQuad();
       }
     }
@@ -677,6 +760,7 @@ void main() {
         const L = { ...layerDef, index: layerDef.seed ?? 0 };
         if (L.type === "sparkles") return null;
         await ensureImages([L]);
+        ensureMasks([L]);
         await ensurePrograms(paintOf(L).map(progKey));
         // Fit the layer's rect into w x h, centered.
         const r = layerRect(L);

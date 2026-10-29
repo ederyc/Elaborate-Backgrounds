@@ -11,6 +11,16 @@
     image   an imported picture (a photographed cut-out, a drawing), with
             an optional color tint.
 
+  Two more outlines come from the editor's customizer: "path", a cut-out
+  through up to 32 points (optionally smoothed), and "mask", a cut-out
+  taken from a picture: a photographed paper shape, say. The renderer turns
+  the picture into a distance field once (renderer.js, buildMask), so a
+  mask gets the same rough edge, puff and shadow as any other shape.
+
+  "Boil photos": an image or mask can list boilImages, two or three photos
+  of the same object nudged slightly. In a layer with a pose cycle they
+  swap pose by pose, which is real boil, from real material.
+
   Both are drawn in their own coordinates, centered on (0, 0), and placed
   by the item transform (see js/items.js), so moving, scaling or rotating
   one never changes its shader inputs.
@@ -20,8 +30,11 @@
   const rgb = (h) => LB.gl.rgb(h);
 
   const SHAPE = `
-uniform int uShape;       // 0 rectangle, 1 ellipse, 2 polygon or star, 3 blob, 4 custom outline (points)
+uniform int uShape;       // 0 rectangle, 1 ellipse, 2 polygon or star, 3 blob, 4 custom outline (points), 5 cut-out from a picture
 uniform vec2 uHalf;       // half width, half height
+uniform vec2 uMid;        // center of the outline box (blobs and custom outlines needn't be centered on 0, 0)
+uniform sampler2D uMask;  // a picture's distance field, for cut-outs
+uniform float uMaskPx;    // scene units per distance-field pixel
 uniform vec4 uForm;       // corner roundness 0..1, sides, star depth 0..1, 0
 uniform int uMat;         // 0 paper, 1 felt, 2 clay, 3 foliage, 4 gradient, 5 photo, 6 water, 7 sand, 8 stripes, 9 cardboard
 uniform vec3 uCol1, uCol2;
@@ -81,6 +94,13 @@ float sdShape(vec2 p) {
     return -side * length(h) * min(uHalf.x, uHalf.y);
   }
   if (uShape == 4) return sdPath(p) - uForm.x;
+  if (uShape == 5) {
+    // Distance field texels hold 128 + 4 x the distance in texels, so +-32 texels around the edge.
+    vec2 uv = p / (2.0 * uHalf) + 0.5;
+    float m = (texture(uMask, clamp(uv, 0.0, 1.0)).r * 255.0 - 128.0) / 4.0 * uMaskPx;
+    vec2 q = abs(p) - uHalf;
+    return max(m, length(max(q, 0.0)) + min(max(q.x, q.y), 0.0));
+  }
   float d = 1e9;
   for (int i = 0; i < uLobeCount; i++) d = smin(d, length(p - uLobes[i].xy) - uLobes[i].z, uMerge);
   return d;
@@ -97,7 +117,7 @@ void main() {
   }
 
   vec2 pp = p * uGrain + uSeed * 1.7;
-  float tY = smoothstep(-uHalf.y, uHalf.y, p.y);
+  float tY = smoothstep(uMid.y - uHalf.y, uMid.y + uHalf.y, p.y);
 
   // Shared noise, each computed exactly once. The Windows shader compiler inlines every call site,
   // so one call per noise (with a scale picked by material) keeps this shader quick to compile.
@@ -188,7 +208,7 @@ void main() {
   outColor = vec4(c.rgb * c.a, c.a);
 }`;
 
-  const SHAPES = ["rect", "ellipse", "polygon", "blob", "path"];
+  const SHAPES = ["rect", "ellipse", "polygon", "blob", "path", "mask"];
   const MATERIALS = ["paper", "felt", "clay", "foliage", "gradient", "photo", "water", "sand", "stripes", "cardboard"];
 
   const half = (el) => [Math.max(el.w || 0.2, 0.002) / 2, Math.max(el.h || 0.2, 0.002) / 2];
@@ -199,8 +219,25 @@ void main() {
       Math.max(...ls.map((l) => l[0] + l[2])), Math.max(...ls.map((l) => l[1] + l[2])),
     ];
   }
+  // The points the shader draws: the control points, or with "smooth", a curve cut from them
+  // (Chaikin corner cutting, as many passes as fit in 32 points).
+  const DEFAULT_PTS = [[-0.1, -0.1], [0.1, -0.1], [0, 0.1]];
+  function pathPoints(el) {
+    let ps = el.points && el.points.length >= 3 ? el.points.slice(0, 32) : DEFAULT_PTS;
+    if (el.smooth) {
+      while (ps.length * 2 <= 32) {
+        const out = [];
+        for (let i = 0; i < ps.length; i++) {
+          const a = ps[i], b = ps[(i + 1) % ps.length];
+          out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+        }
+        ps = out;
+      }
+    }
+    return ps;
+  }
   function pathBounds(el) {
-    const ps = el.points && el.points.length >= 3 ? el.points : [[-0.1, -0.1], [0.1, -0.1], [0, 0.1]];
+    const ps = pathPoints(el);
     const r = el.round || 0;
     return [Math.min(...ps.map((p) => p[0])) - r, Math.min(...ps.map((p) => p[1])) - r, Math.max(...ps.map((p) => p[0])) + r, Math.max(...ps.map((p) => p[1])) + r];
   }
@@ -218,9 +255,16 @@ void main() {
   };
   const SHADOW_OFF = [0.012, 0.018]; // at shadow 1, in scene units: down and right, away from the key light
 
+  // Every picture a shape may sample: its own, and its boil photos.
+  const pictures = (el) => (el.image ? [el.image, ...(el.boilImages || [])] : []);
+  const maskKey = (el, image = el.image) => `${image}|${(el.mask && el.mask.from) || "alpha"}|${(el.mask && el.mask.threshold) ?? 0.5}`;
+
   LB.ELEMENTS.shape = {
     glsl: SHAPE,
-    images: (el) => (el.material === "photo" && el.image ? [el.image] : []),
+    images: (el) => (el.material === "photo" || el.shape === "mask" ? pictures(el) : []),
+    masks: (el) => (el.shape === "mask" ? pictures(el).map((im) => ({ key: maskKey(el, im), image: im, from: (el.mask && el.mask.from) || "alpha", threshold: (el.mask && el.mask.threshold) ?? 0.5 })) : []),
+    maskKey,
+    pathPoints,
     outline,
     bbox(el) {
       const b = outline(el);
@@ -234,9 +278,12 @@ void main() {
       gl.uniform1i(u.uShape, Math.max(0, SHAPES.indexOf(el.shape)));
       const boxed = el.shape === "blob" || el.shape === "path";
       gl.uniform2f(u.uHalf, ...(boxed ? [hx, hy] : half(el)));
+      gl.uniform2f(u.uMid, ...(boxed ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : [0, 0]));
+      const mask = el.shape === "mask" && LB.maskInfo ? LB.maskInfo(maskKey(el)) : null;
+      gl.uniform1f(u.uMaskPx, mask ? (el.w || 0.2) / mask.w : 0.001);
       gl.uniform4f(u.uForm, el.shape === "path" ? el.round || 0 : el.corner ?? 0.15, el.sides ?? 5, el.shape === "polygon" ? el.star ?? 0 : 0, 0);
       if (el.shape === "path") {
-        const pts = (el.points || []).slice(0, 32);
+        const pts = pathPoints(el);
         const flatP = new Float32Array(64);
         // Outline points are relative to the shape's center, so the box center has to be (0, 0) for them too.
         pts.forEach((pt, i) => flatP.set(pt, i * 2));
@@ -266,7 +313,9 @@ void main() {
       const tile = el.tile || 0.4;
       const img = el.material === "photo" && LB.imageInfo ? LB.imageInfo(el.image) : null;
       const aspect = img ? img.h / img.w : 1;
-      gl.uniform4f(u.uPhoto, tile, tile * aspect, el.tint ?? 0, 0);
+      // A cut-out filled with its own picture shows that picture once, edge to edge, not tiled.
+      if (el.shape === "mask" && el.material === "photo") gl.uniform4f(u.uPhoto, ...half(el).map((v) => v * 2), el.tint ?? 0, 0);
+      else gl.uniform4f(u.uPhoto, tile, tile * aspect, el.tint ?? 0, 0);
       const flat = new Float32Array(24);
       (el.lobes || []).slice(0, 8).forEach((l, i) => flat.set(l, i * 3));
       gl.uniform3fv(u.uLobes, flat);
@@ -277,7 +326,7 @@ void main() {
 
   LB.ELEMENTS.image = {
     glsl: IMAGE,
-    images: (el) => (el.image ? [el.image] : []),
+    images: pictures,
     bbox(el) {
       const [hx, hy] = half(el);
       return [-hx, -hy, hx, hy];

@@ -7,6 +7,14 @@
                  whole layer selected (from the list), dragging inside its
                  box moves the layer.
     Shape tools  drag out a box to draw a shape into the selected layer.
+    Pen          click to place points; click the first point, double-click
+                 or press Enter to close the outline.
+    Points       double-click a cut-out (or press Enter) to edit its points:
+                 drag a point, drag a + between two points to add one,
+                 Alt-click a point to remove it. Keys: [ and ] pick a point,
+                 arrows move it, + adds one after it, Delete removes it.
+    Poses        with "This pose only" on (under the canvas), moving,
+                 scaling or rotating a piece changes only the pose on screen.
     Drops        store pieces and picture files can be dropped in place.
     Keys         arrows move (Shift: further), Delete removes, Escape
                  deselects. The rest are in main.js.
@@ -27,7 +35,10 @@
   let preview = "desktop";
   let drag = null;
   let hover = null;
+  let pen = null;           // { pts: [scene points], at: last pointer position }
   ED.tool = "select";
+  ED.pointEdit = false;     // editing the points of the selected custom outline
+  ED.pointSel = null;
 
   // ---------- fitting ----------
   function fit() {
@@ -134,6 +145,30 @@
     return null;
   }
 
+  // ---------- editing points ----------
+  const isPath = (it) => it && it.el === "shape" && it.shape === "path" && Array.isArray(it.points);
+  // A control point of the selected outline, in scene and screen space.
+  function pointScene(L, item, q) {
+    const off = poseOffset(L);
+    const w = I().toScene(posedItem(L, item), L, q);
+    return [w[0] + off[0], w[1] + off[1]];
+  }
+  function sceneToLocal(L, item, p) {
+    const off = poseOffset(L);
+    return I().toLocal(posedItem(L, item), L, [p[0] - off[0], p[1] - off[1]]);
+  }
+  function setPointEdit(on) {
+    const item = ED.selItem();
+    on = !!on && isPath(item) && !ED.selLayer().locked;
+    if (on === ED.pointEdit) return;
+    ED.pointEdit = on;
+    ED.pointSel = on ? 0 : null;
+    if (on) ED.emit("status", { msg: "Editing points: drag a point to move it, drag a + to add one, Alt-click a point to remove it. Keys: [ and ] pick a point, arrows move it, + adds, Delete removes. Enter or Escape when you're done." });
+    ED.emit("point-edit", on);
+    drawOverlay();
+  }
+  ED.setPointEdit = setPointEdit;
+
   // ---------- overlay ----------
   const el = (tag, attrs) => {
     const e = document.createElementNS(SVG, tag);
@@ -155,6 +190,15 @@
   function drawOverlay() {
     if (!overlay || ED.recording) return;
     overlay.innerHTML = "";
+    if (pen && pen.pts.length) {
+      const pts = [...pen.pts, ...(pen.at ? [pen.at] : [])].map(toScreen);
+      overlay.append(el("polyline", { class: "ov-draw", points: pts.map((q) => q.join(",")).join(" "), fill: "none" }));
+      pen.pts.forEach((q, i) => {
+        const sp = toScreen(q);
+        overlay.append(el("rect", { class: `ov-point${i === 0 && pen.pts.length >= 3 ? " is-first" : ""}`, x: sp[0] - 4, y: sp[1] - 4, width: 8, height: 8 }));
+      });
+      return;
+    }
     if (drag && drag.kind === "draw") {
       const [a, b] = [toScreen(drag.p0), toScreen(drag.p1)];
       overlay.append(el("rect", { class: "ov-draw", x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), width: Math.abs(b[0] - a[0]), height: Math.abs(b[1] - a[1]) }));
@@ -172,6 +216,19 @@
     const pts = outlineOf(L, item);
     if (!pts) return;
     overlay.append(el("polygon", { class: "ov-sel-shadow", points: poly(pts) }), el("polygon", { class: `ov-sel${item ? "" : " is-layer"}`, points: poly(pts) }));
+    if (ED.pointEdit && isPath(item)) {
+      const cps = item.points.map((q) => pointScene(L, item, q));
+      overlay.append(el("polygon", { class: "ov-ctrl", points: poly(cps) }));
+      cps.forEach((q, i) => {
+        const a = toScreen(q), b = toScreen(cps[(i + 1) % cps.length]);
+        if (item.points.length < 32) overlay.append(el("circle", { class: "ov-mid", cx: (a[0] + b[0]) / 2, cy: (a[1] + b[1]) / 2, r: 4 }));
+      });
+      cps.forEach((q, i) => {
+        const a = toScreen(q);
+        overlay.append(el("rect", { class: `ov-point${i === ED.pointSel ? " is-selected" : ""}`, x: a[0] - 5, y: a[1] - 5, width: 10, height: 10 }));
+      });
+      return;
+    }
     if (item && !L.locked) {
       const hd = handlesFor(pts);
       overlay.append(
@@ -205,6 +262,14 @@
     const lp = localPoint(e);
     viewport.setPointerCapture(e.pointerId);
 
+    if (ED.tool === "pen") {
+      pen = pen || { pts: [] };
+      if (pen.pts.length >= 3 && near(lp, toScreen(pen.pts[0]), 10)) return finishPen();
+      pen.pts.push(p);
+      if (pen.pts.length >= 32) return finishPen();
+      drawOverlay();
+      return;
+    }
     if (ED.tool !== "select") {
       drag = { kind: "draw", p0: p, p1: p, start: lp };
       drawOverlay();
@@ -212,19 +277,49 @@
     }
     const L = ED.selLayer();
     const item = ED.selItem();
+    if (ED.pointEdit && isPath(item)) {
+      const cps = item.points.map((q) => toScreen(pointScene(L, item, q)));
+      const hitPt = cps.findIndex((q) => near(lp, q, 9));
+      if (hitPt >= 0) {
+        if (e.altKey) {
+          if (item.points.length > 3) {
+            ED.change(() => item.points.splice(hitPt, 1), "Remove point");
+            ED.pointSel = Math.min(hitPt, item.points.length - 1);
+          } else ED.emit("status", { msg: "An outline needs at least 3 points." });
+          drawOverlay();
+          return;
+        }
+        ED.pointSel = hitPt;
+        drag = { kind: "point", item, L, i: hitPt, moved: false };
+        drawOverlay();
+        return;
+      }
+      if (item.points.length < 32) {
+        const mid = cps.findIndex((q, i) => { const b = cps[(i + 1) % cps.length]; return near(lp, [(q[0] + b[0]) / 2, (q[1] + b[1]) / 2], 8); });
+        if (mid >= 0) {
+          const a = item.points[mid], b = item.points[(mid + 1) % item.points.length];
+          ED.preview(() => item.points.splice(mid + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]));
+          ED.pointSel = mid + 1;
+          drag = { kind: "point", item, L, i: mid + 1, moved: true, added: true };
+          return;
+        }
+      }
+      setPointEdit(false);
+    }
     if (L && item && !L.locked) {
       const pts = outlineOf(L, item);
       const hd = handlesFor(pts);
-      const t = I().xfOf(item);
+      const f0 = ED.renderer.frameOf(L.id, ED.clock);
+      const t = I().atPose(item, f0).xf;
       const pos = I().position(posedItem(L, item), L.rect ? { rect: L.rect } : L);
       const off = poseOffset(L);
       const centerScene = [pos[0] + off[0], pos[1] + off[1]];
       if (near(lp, hd.rotate)) {
-        drag = { kind: "rotate", item, L, t0: t, a0: Math.atan2(p[1] - centerScene[1], p[0] - centerScene[0]), c: centerScene, moved: false };
+        drag = { kind: "rotate", item, L, f0, t0: t, a0: Math.atan2(p[1] - centerScene[1], p[0] - centerScene[0]), c: centerScene, moved: false };
         return;
       }
       if (near(lp, hd.scale)) {
-        drag = { kind: "scale", item, L, t0: t, d0: Math.hypot(p[0] - centerScene[0], p[1] - centerScene[1]) || 1e-3, c: centerScene, moved: false };
+        drag = { kind: "scale", item, L, f0, t0: t, d0: Math.hypot(p[0] - centerScene[0], p[1] - centerScene[1]) || 1e-3, c: centerScene, moved: false };
         return;
       }
     }
@@ -246,7 +341,8 @@
     const HL = ED.layer(hit.layer);
     if (hit.item) {
       const it = ED.item(hit.layer, hit.item);
-      drag = { kind: "move", item: it, L: HL, p0: p, t0: I().xfOf(it), moved: false };
+      const f0 = ED.renderer.frameOf(HL.id, ED.clock);
+      drag = { kind: "move", item: it, L: HL, f0, p0: p, t0: I().atPose(it, f0).xf, moved: false };
     } else {
       drag = { kind: "layer", L: HL, p0: p, o0: (HL.offset || [0, 0]).slice(), moved: false };
     }
@@ -254,8 +350,9 @@
 
   function onMove(e) {
     const p = toScene(e.clientX, e.clientY);
+    if (pen) { pen.at = p; drawOverlay(); return; }
     if (!drag) {
-      if (ED.tool === "select" && e.pointerType === "mouse") {
+      if (ED.tool === "select" && e.pointerType === "mouse" && !ED.pointEdit) {
         const hv = hitTest(p);
         const key = hv ? hv.layer + "/" + (hv.item || "") : "";
         const was = hover ? hover.layer + "/" + (hover.item || "") : "";
@@ -283,21 +380,25 @@
       return;
     }
     drag.moved = true;
-    if (drag.kind === "move") {
+    const setXf = (nx) => ED.preview(() => ACT().setPosedXf(drag.item, drag.L, nx, drag.f0));
+    if (drag.kind === "point") {
+      const q = sceneToLocal(drag.L, drag.item, p);
+      ED.preview(() => (drag.item.points[drag.i] = [Math.round(q[0] * 1e5) / 1e5, Math.round(q[1] * 1e5) / 1e5]));
+    } else if (drag.kind === "move") {
       const dx = p[0] - drag.p0[0], dy = p[1] - drag.p0[1];
-      ED.preview(() => (drag.item.xf = { ...drag.t0, x: drag.t0.x + dx, y: drag.t0.y + dy }));
+      setXf({ ...drag.t0, x: drag.t0.x + dx, y: drag.t0.y + dy });
     } else if (drag.kind === "layer") {
       const dx = p[0] - drag.p0[0], dy = p[1] - drag.p0[1];
       ED.preview(() => (drag.L.offset = [drag.o0[0] + dx, drag.o0[1] + dy]));
     } else if (drag.kind === "scale") {
       const d = Math.hypot(p[0] - drag.c[0], p[1] - drag.c[1]);
       const s = Math.min(8, Math.max(0.05, drag.t0.s * (d / drag.d0)));
-      ED.preview(() => (drag.item.xf = { ...drag.t0, s: Math.round(s * 100) / 100 }));
+      setXf({ ...drag.t0, s: Math.round(s * 100) / 100 });
     } else if (drag.kind === "rotate") {
       let r = drag.t0.r + Math.atan2(p[1] - drag.c[1], p[0] - drag.c[0]) - drag.a0;
       // Shift snaps to 15° steps.
       if (e.shiftKey) r = Math.round(r / (Math.PI / 12)) * (Math.PI / 12);
-      ED.preview(() => (drag.item.xf = { ...drag.t0, r }));
+      setXf({ ...drag.t0, r });
     }
   }
 
@@ -319,18 +420,30 @@
       ACT().drawShape(tool, box);
       return;
     }
-    if (d.moved) ED.commit({ move: "Move", layer: "Move layer", scale: "Scale", rotate: "Rotate" }[d.kind]);
+    if (d.moved) ED.commit(d.added ? "Add point" : { move: "Move", layer: "Move layer", scale: "Scale", rotate: "Rotate", point: "Move point" }[d.kind] + (ED.poseMode === "pose" && d.L && d.L.cycle && d.kind !== "point" ? " (this pose)" : ""));
     drawOverlay();
   }
 
   // ---------- tools ----------
-  const TOOL_NAMES = { select: "Select", rect: "Rectangle", ellipse: "Ellipse", triangle: "Triangle", star: "Star", cloud: "Cloud" };
+  const TOOL_NAMES = { select: "Select", rect: "Rectangle", ellipse: "Ellipse", triangle: "Triangle", star: "Star", cloud: "Cloud", pen: "Your own outline" };
+  function finishPen() {
+    const pts = pen ? pen.pts.filter((q, i, a) => i === 0 || Math.hypot(q[0] - a[i - 1][0], q[1] - a[i - 1][1]) > 0.003) : [];
+    pen = null;
+    setTool("select");
+    if (pts.length >= 3) ACT().penShape(pts);
+    else ED.emit("status", { msg: "An outline needs at least 3 points." });
+    drawOverlay();
+  }
   function setTool(t) {
+    if (t !== "pen") pen = null;
+    if (t !== "select") setPointEdit(false);
     ED.tool = t;
     document.querySelectorAll("[data-tool]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === t)));
     viewport.classList.toggle("is-drawing", t !== "select");
     viewport.style.cursor = t === "select" ? "default" : "crosshair";
-    if (t !== "select") ED.emit("status", { msg: `${TOOL_NAMES[t]}: drag on the canvas to draw it. Hold Shift for equal sides. Escape cancels.` });
+    if (t === "pen") ED.emit("status", { msg: "Your own outline: click to place points. Click the first point, double-click or press Enter to close it. Backspace removes the last point, Escape cancels." });
+    else if (t !== "select") ED.emit("status", { msg: `${TOOL_NAMES[t]}: drag on the canvas to draw it. Hold Shift for equal sides. Escape cancels.` });
+    drawOverlay();
   }
   ED.setTool = setTool;
 
@@ -344,19 +457,49 @@
   function onKey(e) {
     if (e.target !== viewport) return;
     const step = e.shiftKey ? 0.02 : 0.002;
+    if (ED.tool === "pen" && pen) {
+      if (e.key === "Enter") { e.preventDefault(); finishPen(); }
+      else if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); e.stopPropagation(); pen.pts.pop(); if (!pen.pts.length) pen = null; drawOverlay(); }
+      else if (e.key === "Escape") { e.stopPropagation(); setTool("select"); }
+      return;
+    }
+    const item = ED.selItem(), L = ED.selLayer();
+    if (!ED.pointEdit && e.key === "Enter" && isPath(item)) { e.preventDefault(); setPointEdit(true); return; }
+    if (ED.pointEdit && isPath(item)) {
+      const n = item.points.length, i = ED.pointSel ?? 0;
+      const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+      let handled = true;
+      if (e.key === "Enter" || e.key === "Escape") setPointEdit(false);
+      else if (e.key === "[" || e.key === "]") ED.pointSel = (i + (e.key === "]" ? 1 : n - 1)) % n;
+      else if (arrows[e.key]) {
+        // The step is in scene units on screen; turn it into the outline's own units.
+        const a = pointScene(L, item, item.points[i]);
+        const q = sceneToLocal(L, item, [a[0] + arrows[e.key][0], a[1] + arrows[e.key][1]]);
+        ED.preview(() => (item.points[i] = q));
+        nudged = "Move point";
+      } else if ((e.key === "+" || e.key === "=" || e.key === "Insert") && n < 32) {
+        const a = item.points[i], b = item.points[(i + 1) % n];
+        ED.change(() => item.points.splice(i + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]), "Add point");
+        ED.pointSel = i + 1;
+      } else if ((e.key === "Delete" || e.key === "Backspace") && n > 3) {
+        ED.change(() => item.points.splice(i, 1), "Remove point");
+        ED.pointSel = Math.min(i, n - 2);
+      } else handled = false;
+      if (handled) { e.preventDefault(); e.stopPropagation(); drawOverlay(); return; }
+    }
     const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     if (moves[e.key] && ED.sel.layer) {
       e.preventDefault();
       // Repeated presses fold into one undo step once the key is released.
       ACT().nudge(...moves[e.key], false);
-      nudged = true;
+      nudged = "Move";
     } else if (e.key === "Delete" || e.key === "Backspace") {
       if (ED.sel.layer) { e.preventDefault(); ACT().remove(); }
     }
   }
   let nudged = false;
   function onKeyUp(e) {
-    if (nudged && /^Arrow/.test(e.key)) { nudged = false; ED.commit("Move"); }
+    if (nudged && /^Arrow/.test(e.key)) { ED.commit(nudged); nudged = false; }
   }
 
   // ---------- drops ----------
@@ -394,6 +537,10 @@
     viewport.addEventListener("pointercancel", onUp);
     viewport.addEventListener("pointerleave", () => { if (!drag && hover) { hover = null; drawOverlay(); } });
     viewport.addEventListener("keydown", onKey);
+    viewport.addEventListener("dblclick", (e) => {
+      if (ED.tool === "pen") { finishPen(); return; }
+      if (ED.tool === "select" && isPath(ED.selItem())) setPointEdit(true);
+    });
     viewport.addEventListener("keyup", onKeyUp);
     viewport.addEventListener("dragover", onDragOver);
     viewport.addEventListener("dragleave", () => viewport.classList.remove("is-drop"));
@@ -401,10 +548,11 @@
     document.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", () => setTool(b.dataset.tool)));
     document.querySelectorAll("[data-preview]").forEach((b) => b.addEventListener("click", () => setPreview(b.dataset.preview)));
     new ResizeObserver(() => fit()).observe(viewport.parentElement);
-    ED.on("select", () => { hover = null; drawOverlay(); });
+    ED.on("select", () => { hover = null; if (!isPath(ED.selItem())) setPointEdit(false); drawOverlay(); });
+    ED.on("edit-points", () => setPointEdit(!ED.pointEdit));
     ED.on("doc", () => requestAnimationFrame(drawOverlay));
     ED.on("synced", drawOverlay);
   }
 
-  LB.CANVAS = { init, fit, setTool, setPreview, toScene, hitTest };
+  LB.CANVAS = { init, fit, setTool, setPreview, toScene, toScreen, hitTest };
 })();
