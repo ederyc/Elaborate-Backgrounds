@@ -98,7 +98,7 @@ void main() {
   // Layer fields that only change how a baked layer is placed and blended, never what's in it.
   const COMPOSITE_KEYS = new Set(["baseRect", "order", "sig", "id", "name", "depth", "boil", "haze", "far", "offset", "opacity", "hidden", "locked", "pivot", "anim", "index", "note"]);
   // Scene bounds a layer's texture may cover (the frame plus room for parallax and dragging past the edge).
-  const LIMIT = [-0.35, -0.35, 16 / 9 + 0.35, 1.35];
+  const limitOf = (scene) => [-0.35, -0.35, (scene.aspect || 16 / 9) + 0.35, 1.35];
 
   // Deterministic per-beat randomness for boil.
   function rand(n) {
@@ -174,6 +174,7 @@ void main() {
     // union of what the layer paints. Items moved out of a given rect stretch it to follow.
     function layerRect(L) {
       if (L.type === "sprite") return LB.SPRITE.bbox(L);
+      const LIMIT = limitOf(scene);
       let r = L.rect ? L.rect.slice() : null;
       for (const item of L.paint || []) {
         if (item.shader && !L.rect) r = I.union(r, LIMIT);
@@ -430,6 +431,7 @@ void main() {
       layerCache.clear();
       for (const L of list) if (L.textures) layerCache.set(L.id, { sig: L.sig, textures: L.textures, texSize: L.texSize });
       layers = list;
+      computeView();
       if (onProgress) onProgress(1);
       baked = true;
       dirty = true;
@@ -463,16 +465,7 @@ void main() {
       W = w; H = h;
       canvas.width = W;
       canvas.height = H;
-      // Cover-fit the 16:9 scene; on narrower screens keep the focus point in view.
-      const a = W / H, A = scene.aspect;
-      if (a >= A) {
-        const vh = A / a;
-        view = [0, (1 - vh) * 0.5, A, vh];
-      } else {
-        const vw = a;
-        const x0 = Math.min(Math.max(scene.focus[0] - vw / 2, 0), A - vw);
-        view = [x0, 0, vw, 1];
-      }
+      computeView();
       for (const k in rt) {
         if (Array.isArray(rt[k])) rt[k].forEach((t) => freeTarget(gl, t));
         else freeTarget(gl, rt[k]);
@@ -486,6 +479,22 @@ void main() {
         const s = Math.pow(2, i + 1);
         rt.down.push(target(gl, W / s, H / s));
         if (i < bloomLevels - 1) rt.up.push(target(gl, W / s, H / s));
+      }
+      dirty = true;
+    }
+
+    // Cover-fit the scene to the canvas. A wider canvas shows a band of the scene, a narrower one a
+    // slice; either way the band or slice is centered on the scene's focus point, kept inside the frame.
+    function computeView() {
+      if (!W || !H) return;
+      const a = W / H, A = scene.aspect || 16 / 9;
+      const focus = scene.focus || [A / 2, 0.5];
+      if (a >= A) {
+        const vh = A / a;
+        view = [0, Math.min(Math.max(focus[1] - vh / 2, 0), 1 - vh), A, vh];
+      } else {
+        const vw = a;
+        view = [Math.min(Math.max(focus[0] - vw / 2, 0), A - vw), 0, vw, 1];
       }
       dirty = true;
     }

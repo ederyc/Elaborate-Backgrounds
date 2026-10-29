@@ -325,6 +325,9 @@ dialog p { margin: 0 0 12px; color: var(--ink-soft); }
 .template:hover { border-color: var(--gold); }
 .t-name { font-weight: 600; }
 .t-note { font-size: 0.8125rem; color: var(--ink-soft); }
+.template-blank { cursor: default; }
+.template-blank:hover { border-color: var(--line-strong); }
+.blank-shapes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .export-row { padding: 12px 0; border-top: 1px solid var(--line); }
 .export-row h3 { font: 600 0.9375rem/1.2 var(--sans); margin-bottom: 4px; }
 .export-row p { margin-bottom: 8px; font-size: 0.8125rem; }

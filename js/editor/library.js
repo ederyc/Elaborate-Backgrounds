@@ -103,7 +103,8 @@
         lobes: lobes([[-0.08, 0.02, 0.07], [0, -0.03, 0.085], [0.08, 0.01, 0.07], [0.0, 0.04, 0.07]]), specks: BEADS }) },
     { id: "gradient-backdrop", cat: "Shapes", name: "Painted backdrop", credit: SHAPE, layer: () => ({
       name: "Backdrop", depth: 0, far: true, boil: 0.4, res: 0.5,
-      paint: [shape({ shape: "rect", w: 2.2, h: 1.4, corner: 0, material: "gradient", colors: ["#B9D3EE", "#E6C3E4"], rough: 0, fuzz: 0, puff: 0, shadow: 0, xf: { x: A / 2, y: 0.5, s: 1, r: 0 } })],
+      paint: [shape({ shape: "rect", w: (LB.ED.doc ? LB.ED.doc.aspect : A) + 0.45, h: 1.4, corner: 0, material: "gradient", colors: ["#B9D3EE", "#E6C3E4"], rough: 0, fuzz: 0, puff: 0, shadow: 0,
+        xf: { x: (LB.ED.doc ? LB.ED.doc.aspect : A) / 2, y: 0.5, s: 1, r: 0 } })],
     }), fixed: true },
 
     // ---- plants (the study's elements) ----

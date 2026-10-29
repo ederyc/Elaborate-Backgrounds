@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backdrop Player</title>
+<meta name="description" content="Plays a looping stop-motion scene full screen, as a live wallpaper or a page background.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23000000'/%3E%3Ctext x='16' y='23' font-family='Georgia, serif' font-size='19' font-weight='700' fill='%23D9A441' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
+<!-- player.html?sample=beach (default) or ?sample=garden or ?scene=path/to/scene.json; add &controls=1 for a pause button. -->
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: #1A1420; }
+canvas, #poster { position: fixed; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; }
+.pb { position: fixed; right: 16px; bottom: 16px; min-width: 44px; min-height: 44px; padding: 0 14px; border: 1px solid #D9A441; border-radius: 999px;
+  background: rgba(19, 19, 19, 0.85); color: #F3EEDD; font: 500 15px/1 system-ui, sans-serif; cursor: pointer; }
+.pb:focus-visible { outline: 2px solid #F3EEDD; outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+<h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Backdrop Player</h1>
+<img id="poster" src="images/still.jpg" alt="" hidden>
+<canvas id="scene" aria-hidden="true"></canvas>
+</main>
+<script src="js/gl.js" defer></script>
+<script src="js/clock.js" defer></script>
+<script src="js/materials.js" defer></script>
+<script src="js/elements.js" defer></script>
+<script src="js/shapes.js" defer></script>
+<script src="js/clay.js" defer></script>
+<script src="js/items.js" defer></script>
+<script src="js/post.js" defer></script>
+<script src="js/renderer.js" defer></script>
+<script src="js/scenes/garden-art.js" defer></script>
+<script src="js/scenes/garden.js" defer></script>
+<script src="js/editor/doc.js" defer></script>
+<script src="js/editor/library.js" defer></script>
+<script src="js/scenes/beach.js" defer></script>
+<script src="js/player.js" defer></script>
+</body>
+</html>

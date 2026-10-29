@@ -73,7 +73,16 @@ Why this route:
 
 The other route is importing models (glTF or OBJ) made in Blender. That needs a model loader (three.js or a small parser), which per the brief needs your OK. Imported models would also need a toon or clay shader to match the scene. It's worth doing later if people want their own models; it shouldn't come first.
 
-### 7. Wallpaper output
+### 7. Wallpaper output (built)
+
+Built with a hand-written MP4 writer (no library), since a library needed your OK. In summary:
+
+- Exact loops come from WebCodecs. Every beat is rendered offline and gets its own timestamp, so files are exactly 6.000 s per loop at any size, and faster to make than real time. Measured results are in the README.
+- The real-time recorder stays as a fallback for browsers without frame-by-frame encoding.
+- A live wallpaper is one self-contained HTML file, and player.html embeds a scene as a page background.
+- Scenes can be made in five screen shapes.
+
+Not tested: the live wallpaper file inside Lively Wallpaper or Wallpaper Engine themselves. Both can show a web page, but I can't run them here, so that's yours to try.
 
 - **Frame-exact video.** The current export records the canvas in real time. Measured in Chrome, files came out 5.94 to 5.96 seconds long in six runs, so the last beat is about 50 ms short when the file loops. Rendering each beat offline and encoding it with WebCodecs gives exact, seamless loops, faster than real time. It needs a small MP4 or WebM muxer: a library (your call) or about 200 lines written for this project.
 - **Live wallpaper player.** A small page that plays a scene file. This could serve as a desktop live wallpaper (tools like Lively and Wallpaper Engine can show a web page) or as an embeddable UI background, the idea you raised earlier. It needs research on what each tool accepts before promising anything.

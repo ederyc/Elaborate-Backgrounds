@@ -200,7 +200,7 @@
 
   const XF_FIELDS = (L) => [
     { type: "heading", label: "Placement" },
-    { key: "x", label: "Left to right", type: "range", min: -0.3, max: 2.08, step: 0.001,
+    { key: "x", label: "Left to right", type: "range", min: -0.3, max: (ED.doc ? ED.doc.aspect : 16 / 9) + 0.3, step: 0.001,
       get: (it) => LB.ITEMS.position(it, L)[0], set: (it, v) => { const t = LB.ITEMS.xfOf(it); it.xf = { ...t, x: t.x + v - LB.ITEMS.position(it, L)[0] }; } },
     { key: "y", label: "Top to bottom", type: "range", min: -0.3, max: 1.3, step: 0.001,
       get: (it) => LB.ITEMS.position(it, L)[1], set: (it, v) => { const t = LB.ITEMS.xfOf(it); it.xf = { ...t, y: t.y + v - LB.ITEMS.position(it, L)[1] }; } },
@@ -636,8 +636,10 @@
       { key: "horizon", label: "Horizon haze color", type: "color" },
       { key: "camera.drift.0", label: "Camera drift, side to side", type: "range", min: 0, max: 0.03, step: 0.0005 },
       { key: "camera.drift.1", label: "Camera drift, up and down", type: "range", min: 0, max: 0.015, step: 0.0005 },
-      { key: "focus.0", label: "Phone crop centers on", type: "range", min: 0, max: 16 / 9, step: 0.01, format: (v) => `${Math.round((v / (16 / 9)) * 100)}% across`,
-        hint: "Tall screens show a slice of the 16:9 scene. Switch the preview to Phone to see it." },
+      { key: "focus.0", label: "Narrower screens center on", type: "range", min: 0, max: ED.doc.aspect, step: 0.01, format: (v) => `${Math.round((v / ED.doc.aspect) * 100)}% across`,
+        hint: "A screen narrower than the scene shows a slice of it. Switch the preview to Phone to see it." },
+      { key: "focus.1", label: "Wider screens center on", type: "range", min: 0, max: 1, step: 0.01, format: (v) => `${Math.round(v * 100)}% down`,
+        hint: "A screen wider than the scene shows a band of it, from top to bottom." },
     ];
   }
 

@@ -30,7 +30,7 @@
   // The item's box before its transform. Bespoke shaders cover the layer's own rect.
   function rawBox(item, layer) {
     if (item.el) return LB.ELEMENTS[item.el].bbox(item);
-    return (layer && layer.rect) || [0, 0, 16 / 9, 1];
+    return (layer && layer.rect) || [0, 0, (LB.ED && LB.ED.doc && LB.ED.doc.aspect) || 16 / 9, 1];
   }
 
   function origin(item, layer) {

@@ -45,7 +45,8 @@
       <button type="button" class="icon-btn" data-tool="pen" aria-pressed="false" title="Draw your own outline, point by point (P)" aria-label="Draw your own outline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l3-9 6-6 6 6-6 6z"/><circle cx="12.5" cy="11.5" r="1.6"/><path d="M4 20l6.5-6.5"/></svg></button>
     </div>
     <div class="group" role="group" aria-label="Preview shape">
-      <button type="button" class="tb-btn" data-preview="desktop" aria-pressed="true">Desktop</button>
+      <button type="button" class="tb-btn" data-preview="scene" aria-pressed="true" title="The whole scene, in its own shape">Scene</button>
+      <button type="button" class="tb-btn" data-preview="desktop" aria-pressed="false" title="What a 16:9 screen shows">Desktop</button>
       <button type="button" class="tb-btn" data-preview="phone" aria-pressed="false">Phone</button>
     </div>
     <button type="button" class="tb-btn primary" id="btn-export">Export</button>
@@ -128,10 +129,17 @@
       <span class="t-name">Beach day</span>
       <span class="t-note">The sample scene: a girl digging, waves, palms, gulls and a boardwalk crowd, all made from the editor's pieces.</span>
     </button>
-    <button type="button" class="template" data-template="blank">
-      <span class="t-name">Blank backdrop</span>
-      <span class="t-note">A painted wash to build on.</span>
-    </button>
+    <div class="template template-blank">
+      <span class="t-name" id="blank-h">Blank backdrop</span>
+      <span class="t-note">A painted wash to build on, in the shape of the screen it's for.</span>
+      <div class="blank-shapes" role="group" aria-labelledby="blank-h">
+        <button type="button" class="btn-small" data-template="blank" data-aspect="1.7778">Desktop 16:9</button>
+        <button type="button" class="btn-small" data-template="blank" data-aspect="2.3333">Ultrawide 21:9</button>
+        <button type="button" class="btn-small" data-template="blank" data-aspect="1.6">Laptop 16:10</button>
+        <button type="button" class="btn-small" data-template="blank" data-aspect="1">Square</button>
+        <button type="button" class="btn-small" data-template="blank" data-aspect="0.4615">Phone (tall)</button>
+      </div>
+    </div>
     <button type="button" class="template" data-template="study">
       <span class="t-name">Garden study</span>
       <span class="t-note">The study of a stop-motion backdrop by Tamara, with every piece editable.</span>
@@ -171,8 +179,17 @@
     <h3>Video loop</h3>
     <p id="video-format"></p>
     <div class="field field-select"><label for="video-size">Size</label><select id="video-size"></select></div>
-    <button type="button" class="btn-small primary" id="do-video">Record loop</button>
+    <div class="field field-select"><label for="video-loops">Length</label>
+      <select id="video-loops"><option value="1">One loop, 6 seconds</option><option value="2">2 loops, 12 seconds</option><option value="5">5 loops, 30 seconds</option></select>
+      <p class="field-hint">For players that pause between repeats, a longer file hides the jump.</p>
+    </div>
+    <button type="button" class="btn-small primary" id="do-video">Save video</button>
     <progress id="video-progress" max="1" value="0" hidden>0%</progress>
+  </section>
+  <section class="export-row">
+    <h3>Live wallpaper</h3>
+    <p>One HTML file that plays the scene full screen, with nothing else on it. Use it with an app that shows a web page as a desktop wallpaper, or as a page background. It works offline.</p>
+    <button type="button" class="btn-small" id="do-live">Save live wallpaper</button>
   </section>
   <section class="export-row">
     <h3>Scene file</h3>
@@ -200,6 +217,7 @@
 <script src="js/editor/actions.js" defer></script>
 <script src="js/editor/panels.js" defer></script>
 <script src="js/editor/canvas.js" defer></script>
+<script src="js/editor/mp4.js" defer></script>
 <script src="js/editor/export.js" defer></script>
 <script src="js/editor/main.js" defer></script>
 </body>

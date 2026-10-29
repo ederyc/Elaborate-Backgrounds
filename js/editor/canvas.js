@@ -32,7 +32,7 @@
   const A = 16 / 9;
 
   let viewport, canvas, overlay;
-  let preview = "desktop";
+  let preview = "scene";
   let drag = null;
   let hover = null;
   let pen = null;           // { pts: [scene points], at: last pointer position }
@@ -47,7 +47,8 @@
     const cs = getComputedStyle(parent);
     const aw = parent.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const ah = parent.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    const aspect = preview === "phone" ? 9 / 19.5 : A;
+    // "scene" shows the whole scene; the others preview the crop a desktop or a phone would show.
+    const aspect = preview === "phone" ? 9 / 19.5 : preview === "desktop" ? A : (ED.doc && ED.doc.aspect) || A;
     let w = aw, h = aw / aspect;
     if (h > ah) { h = ah; w = h * aspect; }
     w = Math.max(80, Math.floor(w));
@@ -612,6 +613,7 @@
     ED.on("edit-points", () => setPointEdit(!ED.pointEdit));
     ED.on("doc", () => requestAnimationFrame(drawOverlay));
     ED.on("synced", drawOverlay);
+    ED.on("load", () => requestAnimationFrame(fit));
   }
 
   LB.CANVAS = { init, fit, setTool, setPreview, toScene, toScreen, hitTest };

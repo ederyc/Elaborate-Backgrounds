@@ -95,18 +95,22 @@
   }
 
   // ---------- creating and checking documents ----------
-  function blankDoc() {
+  // Screen shapes a scene can be made in. Scene units are always 1 tall, so x runs 0 to the aspect.
+  const ASPECTS = [
+    [16 / 9, "Desktop, 16:9"], [21 / 9, "Ultrawide, 21:9"], [16 / 10, "Laptop, 16:10"], [1, "Square, 1:1"], [9 / 19.5, "Phone, tall"],
+  ];
+  function blankDoc(aspect = A) {
     const preset = PRESETS.warm;
     return normalize({
       format: FORMAT, version: VERSION,
       title: "Untitled scene",
-      aspect: A, focus: [A / 2, 0.5],
+      aspect, focus: [aspect / 2, 0.5],
       horizon: "#CDB8F5", background: "#1A1420",
       camera: { drift: [0.008, 0.003] },
       fps: 12, boil: 1,
       layers: [
         { id: "backdrop", name: "Backdrop", depth: 0, far: true, boil: 0.4, seed: 1, paint: [
-          { el: "shape", shape: "rect", w: 2.2, h: 1.4, material: "gradient", colors: ["#B9D3EE", "#E6C3E4"], rough: 0, fuzz: 0, puff: 0, shadow: 0, corner: 0, xf: { x: A / 2, y: 0.5, s: 1, r: 0 } },
+          { el: "shape", shape: "rect", w: aspect + 0.45, h: 1.4, material: "gradient", colors: ["#B9D3EE", "#E6C3E4"], rough: 0, fuzz: 0, puff: 0, shadow: 0, corner: 0, xf: { x: aspect / 2, y: 0.5, s: 1, r: 0 } },
         ] },
       ],
       post: clone(preset.post),
@@ -143,8 +147,8 @@
     d.format = FORMAT;
     d.version = VERSION;
     d.title = typeof d.title === "string" && d.title.trim() ? d.title.trim().slice(0, 80) : "Untitled scene";
-    d.aspect = A;
-    d.focus = Array.isArray(d.focus) ? [num(d.focus[0], A / 2, 0, A), num(d.focus[1], 0.5, 0, 1)] : [A / 2, 0.5];
+    d.aspect = num(d.aspect, A, 0.4, 2.6);
+    d.focus = Array.isArray(d.focus) ? [num(d.focus[0], d.aspect / 2, 0, d.aspect), num(d.focus[1], 0.5, 0, 1)] : [d.aspect / 2, 0.5];
     d.horizon = isHex(d.horizon) ? d.horizon : "#CDB8F5";
     d.background = isHex(d.background) ? d.background : "#000000";
     d.camera = { drift: Array.isArray(d.camera && d.camera.drift) ? [num(d.camera.drift[0], 0.008, 0, 0.1), num(d.camera.drift[1], 0.003, 0, 0.1)] : [0.008, 0.003] };
@@ -418,6 +422,6 @@
     return { pack: { id: String(raw.id || uid("pack")), name, author, license: raw.license ? String(raw.license).slice(0, 200) : "", pieces }, warnings };
   }
 
-  LB.DOC = { FORMAT, VERSION, A, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal,
+  LB.DOC = { FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal,
     dbAll, dbPut, PACK_FORMAT, normalizePiece, normalizePack };
 })();

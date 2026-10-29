@@ -10,7 +10,7 @@ Looping stop-motion backgrounds in the browser, in two parts:
 
 **The study is a study.** The original backdrop was made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it. The study's art is entirely procedural (shader code, no images), written by Claude at my direction. So are the editor's starter pieces, which say so in the store, and the Beach day sample, which Claude built from the editor's own pieces. My own scenes and materials, photographed and drawn by me, come next and are the actual portfolio piece.
 
-Status: phases 1 to 6 are done: the analysis, the rendering skeleton, the study, the first version of the editor, the customizer and store (drawing and editing outlines, animating pose by pose, cut-outs from photos, real boil, My pieces and packs), and 3D pieces sculpted from clay, felt or plastic parts. The plan for the rest, including the store and 3D pieces, is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
+Status: phases 1 to 6 are done: the analysis, the rendering skeleton, the study, the first version of the editor, the customizer and store (drawing and editing outlines, animating pose by pose, cut-outs from photos, real boil, My pieces and packs), 3D pieces sculpted from clay, felt or plastic parts, and wallpaper output (exact video loops, a live wallpaper file and player, and scenes in any screen shape). What's left is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
 
 ## Running it
 
@@ -18,7 +18,8 @@ There's no build step and no dependencies. Serve the folder with any static serv
 
 ```sh
 python -m http.server
-# then open http://localhost:8000 for the study, or http://localhost:8000/editor.html for the editor
+# then open http://localhost:8000 for the study, http://localhost:8000/editor.html for the editor,
+# or http://localhost:8000/player.html for the player (?sample=garden, ?scene=file.json, &controls=1)
 ```
 
 The study's URL switches, mostly for comparing ingredients:
@@ -48,7 +49,12 @@ The first time, it opens the Beach day sample. **New** starts from a blank backd
 - **My pieces and packs.** **Save to My pieces** (for a piece) or **Save layer to My pieces** keeps it in this browser, under My pieces in the store. **Save as a pack** writes them all to one file with your name and a license line. **Install a pack** adds someone else's pack as its own store group.
 - **Properties** has everything about the selected piece and its layer. **Look** has the beat rate, boil, grade and each post pass.
 - **Keys.** Ctrl+Z and Ctrl+Shift+Z undo and redo. Ctrl+S saves the scene file, Ctrl+D duplicates and Space plays or pauses. On the canvas, the arrows move the selection (add Shift to move further), Delete removes it and Escape deselects. [ and ] move it backward or forward. , and . step through poses.
-- **Saving.** The scene autosaves in this browser. **Save file** downloads a .json scene file (format in [docs/SCENE-FORMAT.md](docs/SCENE-FORMAT.md)), with your pictures embedded. **Export** saves a PNG at desktop or phone sizes, or records a 6-second video loop.
+- **Screen shapes.** **New** makes a blank scene for a desktop (16:9), an ultrawide (21:9), a laptop (16:10), a square or a phone (tall). **Scene** previews the whole scene, and **Desktop** and **Phone** preview the crop those screens show. In Look, two sliders set where a crop centers.
+- **Saving and exporting.** The scene autosaves in this browser. **Save file** downloads a .json scene file (format in [docs/SCENE-FORMAT.md](docs/SCENE-FORMAT.md)), with your pictures embedded. **Export** offers four things:
+  - a PNG, at sizes that fit the scene listed first;
+  - an MP4 video of one, 2 or 5 loops, rendered beat by beat so it loops exactly;
+  - a **live wallpaper**: one self-contained HTML file that plays the scene full screen, for apps that use a web page as a wallpaper, or as a page background;
+  - the scene file.
 
 ## Quality checks
 
@@ -69,11 +75,24 @@ Measured in Chrome 156 on this laptop (Intel Iris Xe, integrated graphics), driv
 | Rebake after moving one piece, in the study's busiest layers | Median 0.6 to 1.2 ms, worst 6.8 ms (8 moves per layer, three runs) |
 | Rebake after moving one of 25 shapes in one layer | 0.5 to 1.7 ms |
 | Scene file round trip (save, open, save) | Identical text |
-| Video loop, 1280×720 | MP4, 5.94 to 5.96 s long (six runs): the last beat is about 50 ms short, so a looping player shows a tiny hitch. Frame-exact export is planned (PLAN.md, phase 7). |
+| Exact video loop | Beach day exported with WebCodecs (H.264) and the project's own MP4 writer. Each file was read back twice: from its own boxes, and by Chrome's video player. First and last frames decoded to real pictures. Results are in the table below. |
+| Real-time fallback | For browsers without frame-by-frame encoding: MP4 or WebM recorded live, 5.94 to 5.96 s, so the last beat runs about 50 ms short |
+| Live wallpaper file | 783 KB for Beach day with everything inline. Played on its own from another folder, it drew 12 frames a second, one per beat, and asked for 25 animation frames in 2 seconds, where a 60 Hz loop asks for 120. |
+| Player page | The pause button (?controls=1) stopped all drawing; reduced motion didn't autoplay; axe found no violations |
+| Screen shapes | Blank phone, ultrawide and square scenes got a canvas in their own shape, and their own sizes first in Export. The crop sliders now move the view at once; before, they waited for a window resize. |
 | axe-core 4.10 scan, editor | No violations with nothing selected, a piece selected, the Look tab, and the Export dialog; again in Beach day with a gull layer and one of the girl's pieces selected; and with an installed pack open, and with the pose strip showing |
 | axe-core 4.10 scan, study page | No violations |
 | Reduced motion | The editor doesn't autoplay; the play button reads "Play" |
 | Width 420 px | No sideways scrolling; canvas first, then the panels |
+
+Exact video exports of Beach day, measured:
+
+| Size | Loops | Length (file and player) | Frames | File size | Time to export |
+| --- | --- | --- | --- | --- | --- |
+| 1280 × 720 | 1 | 6.000 s | 72 | 2.3 MB | 0.9 s |
+| 1920 × 1080 | 5 | 30.000 s | 360 | 23.8 MB | 4.0 s |
+| 3840 × 2160 | 1 | 6.000 s | 72 | 18.7 MB | 5.6 s |
+| 1080 × 1920 | 1 | 6.000 s | 72 | 5.4 MB | 1.2 s |
 
 Keyboard: every control in the panels is a native button, input or select with a visible label, and the canvas takes the arrow keys when focused. Moving pieces precisely without a mouse goes through the Placement sliders. The handles themselves need a mouse or touch.
 
@@ -84,6 +103,7 @@ Not measured yet: Lighthouse, frame times on a phone, and touch use. Handles are
 ```
 index.html                 The study page, caption and play/pause control
 editor.html                The editor
+player.html                The player: a scene full screen, as a wallpaper or a page background
 css/tokens.css             The portfolio's tokens (copied from Resume/css/style.css)
 css/site.css               The study page's chrome
 css/editor.css             The editor's layout and controls
@@ -106,7 +126,9 @@ js/editor/actions.js       Editing actions shared by panels, canvas and keys
 js/editor/fields.js        Labeled controls built from small definitions
 js/editor/panels.js        Layers, store, Properties and Look panels
 js/editor/canvas.js        Canvas fitting, selection overlay, handles, drawing, drops
-js/editor/export.js        Scene files, PNG stills, video loops
+js/editor/export.js        Scene files, PNG stills, exact video loops, live wallpaper files
+js/editor/mp4.js           A small MP4 writer for one H.264 track (for exact loops)
+js/player.js               The player behind player.html and exported live wallpapers
 js/editor/main.js          Editor boot, frame loop, shortcuts
 tools/sample_palette.py    Samples colors and tone stats from reference frames or renders
 ```

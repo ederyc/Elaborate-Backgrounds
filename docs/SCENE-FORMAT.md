@@ -4,7 +4,7 @@ A scene is one JSON file. The editor saves and opens it, and the renderer draws 
 
 ## Units
 
-Everything is in **scene units**. The frame is 16:9: x runs from 0 (left) to 1.778 (right), and y from 0 (top) to 1 (bottom). Pieces can sit past the edges; parallax and dragging can bring them into view.
+Everything is in **scene units**. y runs from 0 (top) to 1 (bottom), and x from 0 (left) to the scene's `aspect`: 1.778 for a 16:9 scene. Pieces can sit past the edges; parallax and dragging can bring them into view.
 
 ## The file
 
@@ -30,7 +30,8 @@ Everything is in **scene units**. The frame is 16:9: x runs from 0 (left) to 1.7
 
 | Field | Meaning |
 | --- | --- |
-| `focus` | The point a tall (phone) crop keeps centered |
+| `aspect` | The scene's shape, width over height: 1.778 for 16:9, 2.333 for 21:9, 1.6 for 16:10, 1 for square, 0.462 for a tall phone. x runs from 0 to this. |
+| `focus` | The point a crop keeps centered: x for screens narrower than the scene, y for screens wider than it |
 | `background` | The color behind every layer |
 | `horizon` | The color layers fade toward with `haze` (aerial perspective) |
 | `camera.drift` | How far the camera sways over one loop, at depth 1 |
