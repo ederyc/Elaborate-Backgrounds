@@ -10,7 +10,7 @@ Looping stop-motion backgrounds in the browser, in two parts:
 
 **The study is a study.** The original backdrop was made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it. The study's art is entirely procedural (shader code, no images), written by Claude at my direction. So are the editor's starter pieces, which say so in the store, and the Beach day sample, which Claude built from the editor's own pieces. My own scenes and materials, photographed and drawn by me, come next and are the actual portfolio piece.
 
-Status: phases 1 to 5 are done: the analysis, the rendering skeleton, the study, the first version of the editor, and the customizer and store (drawing and editing outlines, animating pose by pose, cut-outs from photos, real boil, My pieces and packs). The plan for the rest, including the store and 3D pieces, is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
+Status: phases 1 to 6 are done: the analysis, the rendering skeleton, the study, the first version of the editor, the customizer and store (drawing and editing outlines, animating pose by pose, cut-outs from photos, real boil, My pieces and packs), and 3D pieces sculpted from clay, felt or plastic parts. The plan for the rest, including the store and 3D pieces, is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
 
 ## Running it
 
@@ -43,6 +43,7 @@ The first time, it opens the Beach day sample. **New** starts from a blank backd
 - **Animate.** Give a layer poses in Properties (2 to 12, at a rate that fits the loop). Pose buttons appear under the canvas, and , and . step through them. With **This pose only** on, moving, scaling or rotating a piece changes just the pose on screen. **Onion skin** shows the previous pose faintly, **Copy previous pose** starts a new pose from the last one, and a piece can be hidden in single poses.
 - **Cut-outs from photos.** Import a photo of a paper shape, select it, and use **Turn into a cut-out**. The editor guesses whether the shape is dark on light, light on dark, or a see-through PNG. You can change that, and move where the edge falls, with the Cut out settings under Shape. It then gets a handmade edge, puff and shadow like any shape.
 - **Real boil.** On a picture or cut-out, pick a second and third photo of the same object under Boil photos. They swap on the beat.
+- **3D pieces.** The 3D group in the store has a rubber duck, a mushroom, a crab, a pebble stack, a felt bird and a spinning duck. A 3D piece is made of up to 16 parts (balls, tapered tubes, rounded boxes and eggs) that blend like pressed clay, and a part can be cut away to make a hollow. Properties has the turn, tilt, squash, material (clay, felt or shiny plastic) and each part's position, size and color. Double-click the piece, or press Enter, to pick and drag its parts on the canvas. **Turntable**, **Bounce** and **Wobble** animate it in one click, moving it to its own layer first if it shares one.
 - **Store.** Click a piece to add it in the middle of the frame, or drag it to a spot. **Import picture**, or dropping image files on the canvas, adds your own pictures. A shape's material can also be **Photo**, which fills it with one of them.
 - **My pieces and packs.** **Save to My pieces** (for a piece) or **Save layer to My pieces** keeps it in this browser, under My pieces in the store. **Save as a pack** writes them all to one file with your name and a license line. **Install a pack** adds someone else's pack as its own store group.
 - **Properties** has everything about the selected piece and its layer. **Look** has the beat rate, boil, grade and each post pass.
@@ -59,6 +60,8 @@ Measured in Chrome 156 on this laptop (Intel Iris Xe, integrated graphics), driv
 | Editor ready, study scene loaded | 1.1 to 1.3 s (three runs, before Beach day) |
 | Editor ready, Beach day loaded | 2.8 s (two runs): 1.8 s compiling the shape shader, 70 to 80 ms baking 125 textures. It was 2.4 to 2.6 s before cut-outs and smooth outlines. |
 | Phase 5, scripted end to end | Pen outline of 5 points; point drag, Alt-click removal, keyboard add and move; smoothing; 4 poses with a move in pose 2 only, copy previous pose and onion skin; a photographed paper star turned into a cut-out (guessed "dark on light"); boil photos; save to My pieces, export a pack, delete, reinstall and add from it. All behaved as described. A file that isn't a pack was refused with a message. |
+| 3D, scripted end to end | Added the duck from the store; turned it from the panel; added a part; picked and dragged a part on the canvas and from the keyboard; undid both; made a 12-pose turntable (344 ms from the click to the redrawn canvas). All behaved as described. |
+| 3D shader compile | 277 ms on its own; with Beach day it compiles alongside the shape shader, and the editor was ready in 2.6 to 2.7 s (two runs, 141 textures) |
 | Cut-out click testing | A red disc of radius 0.12: hit at 0.11 from its center, missed at 0.14 and in the empty corner |
 | Beach day texture memory | About 78 MB at a 900 px tall bake (this test window). A 1080p screen bakes denser, so expect about 1.8 times that. |
 | Beach day, a new beat | 0.2 ms median, 0.3 ms p95 to draw (30 beats, 976×549 canvas) |
@@ -88,7 +91,8 @@ js/gl.js                   WebGL2 helpers, including parallel shader compiling
 js/clock.js                The stepped clock and the 6-second loop
 js/materials.js            Procedural material library: noise, fibers, foliage, paper, clay, beads, light
 js/elements.js             Reusable art elements (canopy, florets, trunk, turf...) and the flower/leaf sprite shader
-js/shapes.js               Shapes people make (outline, material, rough edge, puff, shadow) and imported images
+js/shapes.js               Shapes people make (outline, material, rough edge, puff, shadow), cut-outs and imported images
+js/clay.js                 3D pieces: parts blended like clay, raymarched once per pose when a layer bakes
 js/items.js                Piece geometry: move/scale/rotate transforms, bounds, hit testing
 js/post.js                 Post-processing shaders
 js/renderer.js             Baking (only what changed), compositing, parallax, boil, the post stack

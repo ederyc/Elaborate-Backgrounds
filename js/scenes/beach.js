@@ -630,6 +630,29 @@
     ];
     return items;
   }
+  // ======================= 3D pieces =======================
+  // A rubber duck afloat in the shallows, bobbing and rocking (4 poses), its underside hidden by
+  // a patch of water and a ring of foam, and a clay crab scuttling near the water's edge (12 poses).
+  function rubberDuck() {
+    const c = [0.36, 0.875], k = 1.35;
+    const duck = { ...LB.SCULPTS.duck(), name: "Rubber duck", yaw: -0.75, pitch: -0.3, shadow: 0, xf: place(c[0], c[1] - 0.012, 0) };
+    duck.xf.s = k;
+    duck.poses = [{}, { y: -0.004, r: 0.05 }, { y: -0.006 }, { y: -0.003, r: -0.05 }];
+    const water = oval([c[0], c[1] + 0.034 * k], 0.2 * k, 0.05 * k, { material: "water", colors: ["#7FD9D0", "#A6EBE0"], puff: 0, shadow: 0, rough: 0.8, fuzz: 1, grain: 2 });
+    const ring = oval([c[0] + 0.004, c[1] + 0.02 * k], 0.15 * k, 0.014 * k, { material: "felt", colors: ["#DDF7F1"], puff: 0.2, shadow: 0, rough: 1, fuzz: 1 });
+    const ringPosed = { ...ring, poses: [{}, { y: -0.002 }, { y: -0.003 }, { y: -0.001 }] };
+    return layer("rubber-duck", "Rubber duck (3D)", 0.72, [duck, water, ringPosed], { boil: 1.3, cycle: { frames: 4, rate: 4 } });
+  }
+  function crab() {
+    const c = [0.71, 0.912], k = 1.1;
+    const it = { ...LB.SCULPTS.crab(), name: "Clay crab", shadow: 0.55, xf: { ...place(c[0], c[1]), s: k } };
+    it.poses = Array.from({ length: 12 }, (_, f) => {
+      const x = r4(0.035 * Math.sin((f / 12) * TAU)), wig = f % 2 ? 0.14 : -0.14;
+      return f ? { x, yaw: wig, y: f % 2 ? -0.002 : 0 } : { yaw: wig };
+    });
+    return layer("crab", "Clay crab (3D)", 0.85, [it], { boil: 1.4, cycle: { frames: 12, rate: 6 } });
+  }
+
   function girl() {
     return layer("girl", "Girl digging", 0.82, posed(12, girlFrame), { boil: 1.6, cycle: { frames: 12, rate: 6 } });
   }
@@ -704,6 +727,7 @@
       layer("swimmer", "Swimmer waving", 0.4, swimmer(), { boil: 1.3, cycle: { frames: 4, rate: 4 } }),
       ...gulls(), nearCamp(),
       layer("gull-standing", "Gull pecking", 0.66, standingGull(), { boil: 1.4, cycle: { frames: 4, rate: 4 } }),
+      rubberDuck(), crab(),
       bucketAndCastle(), girl(),
     ];
     return {

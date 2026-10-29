@@ -57,7 +57,9 @@ Built, following recommendation 1 below (a free library that reads pack files): 
 - **Packs.** A pack is a file of pieces with names, credits and a license line. The store reads packs, so new content is a file, not code. The built-in pieces become the first pack.
 - **Your own materials.** Once you've shot the material library (felt, foliage, clay; the shot list in ASSETS.md), those photos become a "Handmade materials" pack credited to you. That's what makes the store's content yours.
 
-### 6. 3D clay pieces
+### 6. 3D clay pieces (built)
+
+Built the recommended way, with no library: sculpts of up to 16 rounded parts (balls, tapered tubes, rounded boxes, eggs, and parts that cut away), raymarched once per pose when the layer bakes. They're lit by the scene's key and fill, with a soft key shadow, ambient occlusion and a cast shadow, in clay, felt or shiny plastic. Properties edits the piece and each part, the canvas can pick and drag parts, and Turntable, Bounce and Wobble animate in one click. The store has six starter sculpts, and Beach day gained a floating rubber duck and a scuttling crab. Model import from Blender wasn't built; it still needs a library and your OK.
 
 **Recommendation: sculpt from rounded primitives, raymarched in the bake shader, and baked into a few stop-motion frames.**
 

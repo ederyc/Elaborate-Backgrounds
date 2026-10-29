@@ -169,6 +169,24 @@
   }
   ED.setPointEdit = setPointEdit;
 
+  // ---------- editing a 3D piece's parts ----------
+  const isClay = (it) => it && it.el === "clay";
+  function partScreen(L, item, i) {
+    const posed = posedItem(L, item);
+    const q = LB.CLAY.project(posed, item.parts[i].at);
+    const off = poseOffset(L);
+    const w = I().toScene(posed, L, [q[0], q[1]]);
+    return toScreen([w[0] + off[0], w[1] + off[1]]);
+  }
+  function setPartEdit(on) {
+    on = !!on && isClay(ED.selItem()) && !ED.selLayer().locked;
+    if (on === ED.partEdit) return;
+    ED.partEdit = on;
+    if (on) ED.emit("status", { msg: "Editing parts: click a dot to pick a part, drag it to move it across the view. Keys: [ and ] pick a part, arrows move it, Delete removes it. Depth and size are in Properties. Enter or Escape when you're done." });
+    ED.emit("point-edit", on);
+    drawOverlay();
+  }
+
   // ---------- overlay ----------
   const el = (tag, attrs) => {
     const e = document.createElementNS(SVG, tag);
@@ -216,6 +234,13 @@
     const pts = outlineOf(L, item);
     if (!pts) return;
     overlay.append(el("polygon", { class: "ov-sel-shadow", points: poly(pts) }), el("polygon", { class: `ov-sel${item ? "" : " is-layer"}`, points: poly(pts) }));
+    if (ED.partEdit && isClay(item)) {
+      item.parts.forEach((pt, i) => {
+        const a = partScreen(L, item, i);
+        overlay.append(el("circle", { class: `ov-part${i === ED.partSel ? " is-selected" : ""}${pt.carve ? " is-carve" : ""}`, cx: a[0], cy: a[1], r: i === ED.partSel ? 7 : 5 }));
+      });
+      return;
+    }
     if (ED.pointEdit && isPath(item)) {
       const cps = item.points.map((q) => pointScene(L, item, q));
       overlay.append(el("polygon", { class: "ov-ctrl", points: poly(cps) }));
@@ -277,6 +302,19 @@
     }
     const L = ED.selLayer();
     const item = ED.selItem();
+    if (ED.partEdit && isClay(item)) {
+      // Pick the nearest dot (selected part first, so stacked parts stay reachable).
+      const order = [ED.partSel, ...item.parts.map((_, i) => i).filter((i) => i !== ED.partSel)];
+      const hitPart = order.find((i) => near(lp, partScreen(L, item, i), 9));
+      if (hitPart !== undefined) {
+        if (hitPart !== ED.partSel) { ED.partSel = hitPart; ED.emit("part-select"); }
+        const pt = item.parts[hitPart];
+        drag = { kind: "part", item, L, i: hitPart, p0: sceneToLocal(L, item, p), base: { at: pt.at.slice(), to: pt.to && pt.to.slice() }, moved: false };
+        drawOverlay();
+        return;
+      }
+      setPartEdit(false);
+    }
     if (ED.pointEdit && isPath(item)) {
       const cps = item.points.map((q) => toScreen(pointScene(L, item, q)));
       const hitPt = cps.findIndex((q) => near(lp, q, 9));
@@ -381,7 +419,10 @@
     }
     drag.moved = true;
     const setXf = (nx) => ED.preview(() => ACT().setPosedXf(drag.item, drag.L, nx, drag.f0));
-    if (drag.kind === "point") {
+    if (drag.kind === "part") {
+      const q = sceneToLocal(drag.L, drag.item, p);
+      ED.preview(() => ACT().movePart(drag.item, drag.i, [q[0] - drag.p0[0], q[1] - drag.p0[1]], drag.base));
+    } else if (drag.kind === "point") {
       const q = sceneToLocal(drag.L, drag.item, p);
       ED.preview(() => (drag.item.points[drag.i] = [Math.round(q[0] * 1e5) / 1e5, Math.round(q[1] * 1e5) / 1e5]));
     } else if (drag.kind === "move") {
@@ -420,7 +461,7 @@
       ACT().drawShape(tool, box);
       return;
     }
-    if (d.moved) ED.commit(d.added ? "Add point" : { move: "Move", layer: "Move layer", scale: "Scale", rotate: "Rotate", point: "Move point" }[d.kind] + (ED.poseMode === "pose" && d.L && d.L.cycle && d.kind !== "point" ? " (this pose)" : ""));
+    if (d.moved) ED.commit(d.added ? "Add point" : { move: "Move", layer: "Move layer", scale: "Scale", rotate: "Rotate", point: "Move point", part: "Move part" }[d.kind] + (ED.poseMode === "pose" && d.L && d.L.cycle && d.kind !== "point" ? " (this pose)" : ""));
     drawOverlay();
   }
 
@@ -465,6 +506,22 @@
     }
     const item = ED.selItem(), L = ED.selLayer();
     if (!ED.pointEdit && e.key === "Enter" && isPath(item)) { e.preventDefault(); setPointEdit(true); return; }
+    if (!ED.partEdit && e.key === "Enter" && isClay(item)) { e.preventDefault(); setPartEdit(true); return; }
+    if (ED.partEdit && isClay(item)) {
+      const n = item.parts.length, i = Math.min(ED.partSel, n - 1);
+      const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+      let handled = true;
+      if (e.key === "Enter" || e.key === "Escape") setPartEdit(false);
+      else if (e.key === "[" || e.key === "]") { ED.partSel = (i + (e.key === "]" ? 1 : n - 1)) % n; ED.emit("part-select"); }
+      else if (arrows[e.key]) {
+        // The step is in scene units; the piece's own units are smaller or larger by its scale.
+        const s = (item.xf && item.xf.s) || 1, r = (item.xf && item.xf.r) || 0, [dx, dy] = arrows[e.key];
+        ED.preview(() => ACT().movePart(item, i, [(Math.cos(r) * dx + Math.sin(r) * dy) / s, (-Math.sin(r) * dx + Math.cos(r) * dy) / s]));
+        nudged = "Move part";
+      } else if (e.key === "Delete" || e.key === "Backspace") ACT().removePart();
+      else handled = false;
+      if (handled) { e.preventDefault(); e.stopPropagation(); drawOverlay(); return; }
+    }
     if (ED.pointEdit && isPath(item)) {
       const n = item.points.length, i = ED.pointSel ?? 0;
       const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
@@ -540,6 +597,7 @@
     viewport.addEventListener("dblclick", (e) => {
       if (ED.tool === "pen") { finishPen(); return; }
       if (ED.tool === "select" && isPath(ED.selItem())) setPointEdit(true);
+      if (ED.tool === "select" && isClay(ED.selItem())) setPartEdit(true);
     });
     viewport.addEventListener("keyup", onKeyUp);
     viewport.addEventListener("dragover", onDragOver);
@@ -548,7 +606,9 @@
     document.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", () => setTool(b.dataset.tool)));
     document.querySelectorAll("[data-preview]").forEach((b) => b.addEventListener("click", () => setPreview(b.dataset.preview)));
     new ResizeObserver(() => fit()).observe(viewport.parentElement);
-    ED.on("select", () => { hover = null; if (!isPath(ED.selItem())) setPointEdit(false); drawOverlay(); });
+    ED.on("select", () => { hover = null; if (!isPath(ED.selItem())) setPointEdit(false); if (!isClay(ED.selItem())) setPartEdit(false); drawOverlay(); });
+    ED.on("edit-parts", () => setPartEdit(!ED.partEdit));
+    ED.on("part-select", drawOverlay);
     ED.on("edit-points", () => setPointEdit(!ED.pointEdit));
     ED.on("doc", () => requestAnimationFrame(drawOverlay));
     ED.on("synced", drawOverlay);

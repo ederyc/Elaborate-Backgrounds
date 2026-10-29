@@ -509,5 +509,85 @@
     say(`Removed the ${pack.name} pack. Scenes that use its pieces keep them.`);
   };
 
+  // ======================= 3D pieces =======================
+  ED.partSel = 0;
+  ED.partEdit = false;
+  const NEW_PART = {
+    sphere: () => ({ kind: "sphere", at: [0, 0, 0], r: 0.03 }),
+    capsule: () => ({ kind: "capsule", at: [-0.03, 0, 0], to: [0.03, 0, 0], r: 0.015, r2: 0.012 }),
+    box: () => ({ kind: "box", at: [0, 0, 0], size: [0.03, 0.03, 0.03], r: 0.008 }),
+    ellipsoid: () => ({ kind: "ellipsoid", at: [0, 0, 0], size: [0.04, 0.025, 0.03] }),
+  };
+  Object.assign(ACT, {
+    NEW_PART,
+    addPart(kind) {
+      const item = ED.selItem();
+      if (!item || item.el !== "clay") return;
+      if (item.parts.length >= LB.CLAY.MAX) return say(`A 3D piece can have up to ${LB.CLAY.MAX} parts.`, "error");
+      const last = item.parts[ED.partSel] || item.parts[item.parts.length - 1];
+      const part = { ...NEW_PART[kind](), color: (last && last.color) || "#C9785A" };
+      // Start it beside the selected part, so it's easy to see.
+      if (last) { const dx = 0.03; part.at = [last.at[0] + dx, last.at[1], last.at[2]]; if (part.to) part.to = [part.at[0] + 0.06, part.at[1], part.at[2]]; }
+      ED.change(() => item.parts.push(part), `Add ${kind}`);
+      ED.partSel = item.parts.length - 1;
+      ED.emit("part-select");
+    },
+    duplicatePart() {
+      const item = ED.selItem();
+      if (!item || item.el !== "clay" || item.parts.length >= LB.CLAY.MAX) return;
+      const src = item.parts[ED.partSel];
+      const copy = D().clone(src);
+      copy.at = [copy.at[0] + 0.02, copy.at[1], copy.at[2]];
+      if (copy.to) copy.to = [copy.to[0] + 0.02, copy.to[1], copy.to[2]];
+      ED.change(() => item.parts.splice(ED.partSel + 1, 0, copy), "Duplicate part");
+      ED.partSel++;
+      ED.emit("part-select");
+    },
+    removePart() {
+      const item = ED.selItem();
+      if (!item || item.el !== "clay") return;
+      if (item.parts.length <= 1) return say("A 3D piece needs at least one part.");
+      ED.change(() => item.parts.splice(ED.partSel, 1), "Remove part");
+      ED.partSel = Math.max(0, Math.min(ED.partSel, item.parts.length - 1));
+      ED.emit("part-select");
+    },
+    // Moves a part in the view plane: d2 is a move in the piece's own 2D coordinates.
+    movePart(item, i, d2, base) {
+      const d3 = LB.CLAY.unproject(item, d2);
+      const pt = item.parts[i];
+      const from = base || { at: pt.at, to: pt.to };
+      pt.at = from.at.map((v, k) => Math.round((v + d3[k]) * 1e5) / 1e5);
+      if (from.to) pt.to = from.to.map((v, k) => Math.round((v + d3[k]) * 1e5) / 1e5);
+    },
+
+    // One-click animation for a 3D piece. The piece moves to its own layer first (unless it's alone),
+    // so the rest of the layer isn't baked once per pose.
+    animate3D(kind) {
+      let L = ED.selLayer();
+      const item = ED.selItem();
+      if (!L || !item || item.el !== "clay") return;
+      const n = kind === "turntable12" ? 12 : kind === "turntable8" ? 8 : kind === "bounce" ? 6 : 4;
+      const rate = { 12: 6, 8: 4, 6: 6, 4: 4 }[n];
+      const k = (item.xf && item.xf.s) || 1;
+      let poses;
+      if (kind.startsWith("turntable")) poses = Array.from({ length: n }, (_, i) => (i ? { yaw: r5((i / n) * Math.PI * 2) } : {}));
+      else if (kind === "bounce") poses = [[0.78, 0.006], [1.08, -0.02], [1.04, -0.036], [1.0, -0.042], [1.06, -0.026], [1.1, -0.008]].map(([sq, y]) => ({ squash: sq, y: r5(y * k) }));
+      else poses = [[0, 0], [0.28, 0.05], [0, 0], [-0.28, -0.05]].map(([yaw, r]) => ({ ...(yaw ? { yaw } : {}), ...(r ? { r } : {}) }));
+      ED.change((doc) => {
+        if (L.paint.length > 1) {
+          const own = { id: D().uid("layer", ED.layerIds()), name: `${D().itemName(item, doc)} (animated)`, depth: L.depth, boil: L.boil, haze: L.haze || 0, far: L.far, seed: Math.floor(Math.random() * 1000), paint: [] };
+          L.paint.splice(L.paint.indexOf(item), 1);
+          doc.layers.splice(doc.layers.indexOf(L) + 1, 0, own);
+          own.paint.push(item);
+          L = own;
+        }
+        L.cycle = { frames: n, rate };
+        item.poses = poses;
+      }, { turntable12: "Turntable", turntable8: "Turntable", bounce: "Bounce", wobble: "Wobble" }[kind]);
+      ED.select(L.id, item.id);
+      say(`${D().itemName(item, ED.doc)} now ${kind.startsWith("turntable") ? `turns all the way round in ${n} poses` : kind === "bounce" ? "bounces, squashing as it lands" : "wobbles from side to side"}, ${(n / rate).toString()} s a cycle.`);
+    },
+  });
+
   LB.ACT = ACT;
 })();

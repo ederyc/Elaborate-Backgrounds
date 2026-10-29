@@ -225,6 +225,9 @@ h2, h3 { margin: 0; }
 .ov-point { fill: #F3EEDD; stroke: #000; stroke-width: 1.5; }
 .ov-point.is-selected, .ov-point.is-first { fill: var(--gold); }
 .ov-mid { fill: rgba(0, 0, 0, 0.5); stroke: #F3EEDD; stroke-width: 1.2; }
+.ov-part { fill: #F3EEDD; stroke: #000; stroke-width: 1.5; }
+.ov-part.is-selected { fill: var(--gold); }
+.ov-part.is-carve { fill: none; stroke: #F3EEDD; stroke-dasharray: 2 2; }
 
 .pose-strip {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);

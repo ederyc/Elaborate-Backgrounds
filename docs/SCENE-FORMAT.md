@@ -124,6 +124,29 @@ In a layer with a pose cycle, a piece can list `poses`, one per frame. Each pose
 
 **Images**: `{ "el": "image", "image": "img-x1y2z", "w": 0.4, "h": 0.3, "tint": 0, "tintColor": "#FFFFFF" }`.
 
+**3D pieces** are sculpts of up to 16 parts, in scene units around the piece's center: x to the right, y down, z toward the viewer.
+
+```json
+{ "el": "clay", "name": "Rubber duck", "material": "plastic", "blend": 0.008, "yaw": -0.5, "pitch": -0.15, "squash": 1, "shadow": 0.5,
+  "parts": [
+    { "kind": "ellipsoid", "at": [0, 0.02, 0], "size": [0.075, 0.048, 0.055], "color": "#F7CE3E" },
+    { "kind": "sphere", "at": [0.034, -0.052, 0], "r": 0.037, "color": "#F7CE3E" },
+    { "kind": "capsule", "at": [0, 0.06, 0], "to": [0, -0.02, 0], "r": 0.02, "r2": 0.016, "color": "#F7F0E2" },
+    { "kind": "box", "at": [0, 0, 0], "size": [0.03, 0.03, 0.03], "r": 0.008, "color": "#8F8A92", "carve": true }
+  ] }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `parts` | `sphere` (`r`), `capsule` (a tube from `at` to `to`, `r` to `r2` thick), `box` (half `size`, corners rounded by `r`) or `ellipsoid` (half `size`). `carve: true` cuts a part away. |
+| `blend` | How softly parts merge, in scene units |
+| `yaw`, `pitch` | Turn around the vertical axis, and tilt toward the viewer (radians) |
+| `squash` | Below 1 squashes, above 1 stretches; the volume stays the same |
+| `material` | `clay` (with `dents`, 0 to 1), `felt` (with `fuzz`) or `plastic` |
+| `shadow` | A soft shadow onto whatever is behind it, 0 to 1 |
+
+In a layer with a pose cycle, a 3D piece's poses can also carry `yaw` and `pitch` (added) and `squash` (multiplied), which is how turntables and bounces are stored.
+
 **The study's elements**: `canopy`, `florets`, `trunk`, `branch`, `turf` and `fuzz`, with the fields described at the top of [js/elements.js](../js/elements.js).
 
 **Bespoke shaders**: `{ "shader": "waterfall" }` draws a shader from the scene's art pack over the layer's `rect`.

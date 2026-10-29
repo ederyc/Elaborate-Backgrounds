@@ -16,6 +16,55 @@
   const A = 16 / 9;
   const STUDY = "Procedural, from the garden study (code by Claude)";
   const SHAPE = "Procedural shape (code by Claude)";
+  const CLAY3D = "Procedural 3D sculpt (code by Claude)";
+
+  // ---- 3D sculpts: parts in scene units around the piece's center (x right, y down, z toward you) ----
+  const sph = (at, r, color, o = {}) => ({ kind: "sphere", at, r, color, ...o });
+  const cap = (at, to, r, r2, color, o = {}) => ({ kind: "capsule", at, to, r, r2, color, ...o });
+  const ell = (at, size, color, o = {}) => ({ kind: "ellipsoid", at, size, color, ...o });
+  const box3 = (at, size, r, color, o = {}) => ({ kind: "box", at, size, r, color, ...o });
+  const SCULPTS = {
+    duck: () => ({ el: "clay", material: "plastic", blend: 0.008, yaw: -0.5, pitch: -0.15, shadow: 0.5, parts: [
+      ell([0, 0.02, 0], [0.075, 0.048, 0.055], "#F7CE3E"),
+      ell([-0.062, -0.004, 0], [0.03, 0.026, 0.03], "#F7CE3E"),
+      sph([0.034, -0.052, 0], 0.037, "#F7CE3E"),
+      ell([0.074, -0.047, 0], [0.024, 0.009, 0.017], "#F28C28"),
+      sph([0.05, -0.066, 0.024], 0.0065, "#1E1A1C"),
+      sph([0.05, -0.066, -0.024], 0.0065, "#1E1A1C"),
+    ] }),
+    mushroom: () => ({ el: "clay", material: "clay", blend: 0.006, pitch: -0.35, shadow: 0.5, dents: 0.6, parts: [
+      cap([0, 0.065, 0], [0, -0.02, 0], 0.022, 0.017, "#F7F0E2"),
+      ell([0, -0.03, 0], [0.07, 0.034, 0.07], "#D9473F"),
+      ell([0, 0.0, 0], [0.058, 0.018, 0.058], "#EFE3C8", { carve: true }),
+      sph([0.03, -0.055, 0.03], 0.009, "#FBF5EA"), sph([-0.034, -0.05, 0.028], 0.008, "#FBF5EA"),
+      sph([0.0, -0.063, 0.0], 0.01, "#FBF5EA"), sph([0.046, -0.04, -0.022], 0.008, "#FBF5EA"), sph([-0.012, -0.05, 0.052], 0.008, "#FBF5EA"),
+    ] }),
+    crab: () => {
+      const parts = [ell([0, 0, 0], [0.055, 0.024, 0.04], "#E2603F")];
+      for (const s of [-1, 1]) {
+        parts.push(cap([s * 0.014, -0.016, 0.022], [s * 0.019, -0.042, 0.026], 0.004, 0.0035, "#E2603F"));
+        parts.push(sph([s * 0.019, -0.046, 0.026], 0.0075, "#241C1E"));
+        parts.push(cap([s * 0.048, -0.004, 0.02], [s * 0.074, -0.02, 0.034], 0.008, 0.009, "#E2603F"));
+        parts.push(ell([s * 0.084, -0.026, 0.038], [0.019, 0.013, 0.012], "#E86B47"));
+        for (const z of [-0.022, 0.004]) parts.push(cap([s * 0.04, 0.008, z], [s * 0.07, 0.034, z * 1.4], 0.005, 0.0035, "#D4553A"));
+      }
+      return { el: "clay", material: "clay", blend: 0.006, pitch: -0.55, shadow: 0.55, dents: 0.5, parts };
+    },
+    pebbles: () => ({ el: "clay", material: "clay", blend: 0.004, pitch: -0.2, shadow: 0.55, dents: 0.9, parts: [
+      ell([0, 0.035, 0], [0.06, 0.022, 0.045], "#8F8A92"),
+      ell([0.004, -0.004, 0], [0.044, 0.018, 0.035], "#A8A2A8"),
+      ell([-0.002, -0.034, 0], [0.03, 0.014, 0.024], "#7D7884"),
+    ] }),
+    bird: () => ({ el: "clay", material: "felt", blend: 0.012, yaw: -0.35, shadow: 0.5, fuzz: 0.8, parts: [
+      sph([0, 0, 0], 0.045, "#4F8FCF"),
+      ell([0.006, 0.014, 0.02], [0.03, 0.022, 0.02], "#F2E4C8"),
+      ell([-0.016, -0.004, 0.034], [0.028, 0.014, 0.01], "#3C70A8", { }),
+      cap([-0.04, -0.01, 0], [-0.07, -0.03, 0], 0.012, 0.004, "#3C70A8"),
+      ell([0.047, -0.008, 0], [0.014, 0.006, 0.008], "#F2A53A"),
+      sph([0.03, -0.018, 0.03], 0.0055, "#1E1A1C"),
+    ] }),
+  };
+  LB.SCULPTS = SCULPTS;
 
   const TREE = ["#0B1A1C", "#244A36", "#3F7350", "#73A85A", "#9CCB5C"];
   const HEDGE = ["#0E2020", "#26493A", "#3E6C4E", "#6A9A5E"];
@@ -87,6 +136,20 @@
     { id: "seagull", cat: "Beach", name: "Seagull flying by", credit: "Procedural, from Beach day (code by Claude)", layer: (at) => LB.BEACH.gull(at) },
     { id: "towel", cat: "Beach", name: "Striped towel", credit: SHAPE, item: () => LB.BEACH.towel([0, 0]) },
 
+    // ---- 3D (clay, felt and plastic sculpts) ----
+    { id: "clay-duck", cat: "3D", name: "Rubber duck", credit: CLAY3D, item: SCULPTS.duck },
+    { id: "clay-mushroom", cat: "3D", name: "Clay mushroom", credit: CLAY3D, item: SCULPTS.mushroom },
+    { id: "clay-crab", cat: "3D", name: "Clay crab", credit: CLAY3D, item: SCULPTS.crab },
+    { id: "clay-pebbles", cat: "3D", name: "Pebble stack", credit: CLAY3D, item: SCULPTS.pebbles },
+    { id: "felt-bird", cat: "3D", name: "Felt bird", credit: CLAY3D, item: SCULPTS.bird },
+    { id: "clay-duck-spin", cat: "3D", name: "Spinning duck", credit: CLAY3D, layer: (at) => {
+      const it = SCULPTS.duck();
+      it.yaw = 0;
+      it.xf = { x: at[0], y: at[1], s: 1.4, r: 0 };
+      it.poses = Array.from({ length: 12 }, (_, i) => (i ? { yaw: Math.round(((i / 12) * Math.PI * 2) * 1e5) / 1e5 } : {}));
+      return { name: "Spinning duck", depth: 0.5, boil: 1.2, cycle: { frames: 12, rate: 6 }, paint: [it] };
+    } },
+
     // ---- sky ----
     { id: "sparkles", cat: "Sky", name: "Sparkles", credit: STUDY, layer: (at) => ({
       type: "sparkles", name: "Sparkles", depth: 0.02, far: true, count: 18, size: 0.0045, color: "#FFF8E6",
@@ -118,6 +181,8 @@
   function make(entry, at) {
     if (entry.item) {
       const item = entry.item();
+      // A sculpt keeps the store's name; flat shapes name themselves from their material.
+      if (item.el === "clay" && !item.name) item.name = entry.name;
       // Unscaled and unrotated, the transform is a plain move, so moving the anchor onto "at" is enough.
       const o = anchorOf(entry, item);
       item.xf = { x: at[0] - o[0], y: at[1] - o[1], s: 1, r: 0 };
@@ -127,5 +192,5 @@
     return { layer };
   }
 
-  LB.LIBRARY = { ENTRIES, CATEGORIES: ["Shapes", "Plants", "Flowers", "Beach", "Sky", "Your images"], imageEntries, make };
+  LB.LIBRARY = { ENTRIES, CATEGORIES: ["Shapes", "Plants", "Flowers", "Beach", "3D", "Sky", "Your images"], imageEntries, make };
 })();

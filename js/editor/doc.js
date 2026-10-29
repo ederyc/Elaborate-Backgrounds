@@ -71,7 +71,7 @@
   }
   const titleCase = (id) => String(id).replace(/[-_]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
-  const ITEM_NAMES = { canopy: "Foliage clump", florets: "Flower cluster", trunk: "Trunk", branch: "Branch", turf: "Grass bank", fuzz: "Felt ball" };
+  const ITEM_NAMES = { canopy: "Foliage clump", florets: "Flower cluster", trunk: "Trunk", branch: "Branch", turf: "Grass bank", fuzz: "Felt ball", clay: "3D piece" };
   const SHAPE_NAMES = { rect: "rectangle", ellipse: "ellipse", polygon: "polygon", blob: "blob", path: "cut-out" };
   function itemName(item, doc) {
     if (item.name) return item.name;
@@ -215,6 +215,11 @@
         if (item.boilImages) {
           item.boilImages = item.boilImages.filter((id) => d.images[id]).slice(0, 2);
           if (!item.boilImages.length) delete item.boilImages;
+        }
+        if (item.el === "clay") {
+          const v3 = (v) => Array.isArray(v) && v.length === 3 && v.every((x) => typeof x === "number" && isFinite(x));
+          item.parts = (Array.isArray(item.parts) ? item.parts : []).filter((pt) => pt && LB.CLAY.KINDS.includes(pt.kind) && v3(pt.at) && (pt.kind !== "capsule" || v3(pt.to))).slice(0, LB.CLAY.MAX);
+          if (!item.parts.length) { warnings.push(`A 3D piece in "${L.name}" was left out: it has no parts that can be drawn.`); return false; }
         }
         if (!item.id || itemIds.has(item.id)) item.id = uid("item", itemIds);
         itemIds.add(item.id);

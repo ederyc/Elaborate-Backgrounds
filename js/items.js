@@ -83,6 +83,7 @@
     const q = toLocal(item, layer, p);
     const b = outlineBox(item, layer);
     if (q[0] < b[0] || q[0] > b[2] || q[1] < b[1] || q[1] > b[3]) return false;
+    if (item.el === "clay") return LB.ELEMENTS.clay.hit(item, q);
     if (item.el === "shape" && item.shape === "mask") {
       const m = LB.maskInfo && LB.maskInfo(LB.ELEMENTS.shape.maskKey(item));
       if (!m) return true;
@@ -123,7 +124,12 @@
     if (!item.poses || !item.poses.length) return item;
     const p = item.poses[((f % item.poses.length) + item.poses.length) % item.poses.length] || {};
     const t = xfOf(item);
-    return { ...item, xf: { x: t.x + (p.x || 0), y: t.y + (p.y || 0), s: t.s * (p.s ?? 1), r: t.r + (p.r || 0) }, hide: !!p.hide };
+    const out = { ...item, xf: { x: t.x + (p.x || 0), y: t.y + (p.y || 0), s: t.s * (p.s ?? 1), r: t.r + (p.r || 0) }, hide: !!p.hide };
+    // 3D clay pieces can also turn, tilt and squash from pose to pose.
+    if (p.yaw) out.yaw = (item.yaw || 0) + p.yaw;
+    if (p.pitch) out.pitch = (item.pitch || 0) + p.pitch;
+    if (p.squash) out.squash = (item.squash ?? 1) * p.squash;
+    return out;
   }
 
   // Bounds over every pose, so a layer's texture fits all of them.

@@ -363,6 +363,47 @@
       f.push({ type: "heading", label: "Felt ball" }, { key: "color", label: "Color", type: "color" },
         { key: "radii.0", label: "Width", type: "range", min: 0.005, max: 0.2, step: 0.001 },
         { key: "radii.1", label: "Height", type: "range", min: 0.005, max: 0.2, step: 0.001 });
+    } else if (item.el === "clay") {
+      const i = () => Math.min(ED.partSel, item.parts.length - 1);
+      const pk = (k) => `parts.${i()}.${k}`;
+      const part = () => item.parts[i()];
+      const is = (...kinds) => () => kinds.includes(part().kind);
+      const pos = (key, label, k3) => ({ key: `${key}.${k3}`, label, type: "range", min: -0.3, max: 0.3, step: 0.001,
+        get: (it) => it.parts[i()][key][k3], set: (it, v) => (it.parts[i()][key][k3] = v) });
+      f.push(
+        { type: "heading", label: "3D" },
+        { key: "yaw", label: "Turn", type: "range", fallback: 0, ...DEG },
+        { key: "pitch", label: "Tilt toward you", type: "range", deg: true, min: -90, max: 90, step: 1, unit: "°", fallback: 0 },
+        { key: "squash", label: "Squash and stretch", type: "range", min: 0.5, max: 1.6, step: 0.01, fallback: 1, format: (v) => `${Math.round(v * 100)}%` },
+        { key: "material", label: "Material", type: "select", options: opts([["clay", "Clay"], ["felt", "Felt"], ["plastic", "Shiny plastic"]]), fallback: "clay" },
+        { key: "dents", label: "Thumb dents", type: "range", ...pct, fallback: 0.5, when: (it) => (it.material || "clay") === "clay" },
+        { key: "fuzz", label: "Fiber fuzz on the edge", type: "range", ...pct, fallback: 0.6, when: (it) => it.material === "felt" },
+        { key: "blend", label: "How softly parts join", type: "range", min: 0, max: 0.04, step: 0.0005, fallback: 0.012 },
+        { key: "shadow", label: "Cast shadow", type: "range", ...pct, fallback: 0 },
+        { type: "heading", label: "Parts" },
+        { key: "partSel", label: "Editing part", type: "select", get: () => String(i()), set: (it, v) => (ED.partSel = +v),
+          options: (it) => it.parts.map((pt, n) => [String(n), `${n + 1}. ${D().titleCase(pt.kind)}${pt.carve ? " (cut away)" : ""}`]),
+          hint: "Double-click the piece on the canvas to pick and drag its parts." },
+        { key: pk("kind"), label: "Part shape", type: "select", get: () => part().kind,
+          options: opts([["sphere", "Ball"], ["capsule", "Tube (tapered)"], ["box", "Rounded box"], ["ellipsoid", "Egg (stretched ball)"]]),
+          set: (it, v) => {
+            const old = it.parts[i()], fresh = ACT().NEW_PART[v]();
+            it.parts[i()] = { ...fresh, at: old.at, color: old.color, ...(old.carve ? { carve: true } : {}),
+              ...(v === "capsule" ? { to: [old.at[0] + 0.06, old.at[1], old.at[2]] } : {}) };
+          } },
+        pos("at", "Left and right", 0), pos("at", "Up and down", 1), pos("at", "Toward you and away", 2),
+        { key: pk("r"), label: "Size", type: "range", min: 0.002, max: 0.15, step: 0.001, when: is("sphere"), get: () => part().r, set: (it, v) => (it.parts[i()].r = v) },
+        pos("to", "End: left and right", 0), pos("to", "End: up and down", 1), pos("to", "End: toward you and away", 2),
+        { key: pk("r"), label: "Start thickness", type: "range", min: 0.002, max: 0.1, step: 0.001, when: is("capsule"), get: () => part().r, set: (it, v) => (it.parts[i()].r = v) },
+        { key: pk("r2"), label: "End thickness", type: "range", min: 0.002, max: 0.1, step: 0.001, when: is("capsule"), get: () => part().r2 ?? part().r, set: (it, v) => (it.parts[i()].r2 = v) },
+        ...[0, 1, 2].map((k3) => ({ key: pk(`size.${k3}`), label: ["Width", "Height", "Depth"][k3], type: "range", min: 0.003, max: 0.2, step: 0.001, when: is("box", "ellipsoid"),
+          get: () => part().size[k3], set: (it, v) => (it.parts[i()].size[k3] = v) })),
+        { key: pk("r"), label: "Corner rounding", type: "range", min: 0, max: 0.05, step: 0.0005, when: is("box"), get: () => part().r ?? 0.008, set: (it, v) => (it.parts[i()].r = v) },
+        { key: pk("color"), label: "Color", type: "color", get: () => part().color || "#C9785A", set: (it, v) => (it.parts[i()].color = v) },
+        { key: pk("carve"), label: "Cut this part away (makes hollows)", type: "toggle", get: () => !!part().carve, set: (it, v) => { if (v) it.parts[i()].carve = true; else delete it.parts[i()].carve; } },
+      );
+      // Only the tube rows apply to tubes.
+      f.forEach((d) => { if (/^to\./.test(d.key)) d.when = is("capsule"); });
     } else if (item.shader) {
       f.push({ type: "note", label: "A bespoke shader from the garden study. You can move, scale and rotate it; its colors live in the study's code." });
     }
@@ -468,7 +509,7 @@
     const ctx = (target, kind) => ({
       target,
       onInput: (def) => { ED.preview(() => {}); if (def.key === "name") ED.emit("names"); if (kind === "item" && ED.selItem() && ED.selItem().el === "shape") rememberStyle(); },
-      onCommit: (label, def) => { ED.commit(`${label}`); if (def.type === "select" || def.type === "toggle") renderProps(def.key); },
+      onCommit: (label, def) => { if (def.key !== "partSel") ED.commit(`${label}`); if (def.type === "select" || def.type === "toggle") renderProps(def.key); if (def.key === "partSel") ED.emit("part-select"); },
     });
     if (item) {
       const sec = h("section", { class: "prop-section", "aria-labelledby": "item-h" });
@@ -490,8 +531,23 @@
         extra.append(h("button", { type: "button", class: "btn-small", text: "Turn into a cut-out", title: "Use the picture's outline as a shape, with a handmade edge, puff and shadow",
           onclick: () => ACT().toCutout() }));
       }
+      if (item.el === "clay") {
+        extra.append(h("button", { type: "button", class: "btn-small", "aria-pressed": String(!!ED.partEdit), text: ED.partEdit ? "Done editing parts" : "Edit parts on the canvas",
+          onclick: () => { ED.emit("edit-parts"); renderProps(); } }));
+      }
       if (!item.shader) extra.append(h("button", { type: "button", class: "btn-small", text: "Save to My pieces", onclick: () => ACT().savePiece("item") }));
       sec.append(extra);
+      if (item.el === "clay") {
+        const parts = h("div", { class: "prop-actions", role: "group", "aria-label": "Add or remove parts" },
+          ...["sphere", "capsule", "box", "ellipsoid"].map((k) => h("button", { type: "button", class: "btn-small", text: `+ ${{ sphere: "Ball", capsule: "Tube", box: "Box", ellipsoid: "Egg" }[k]}`, onclick: () => ACT().addPart(k) })),
+          h("button", { type: "button", class: "btn-small", text: "Duplicate part", onclick: () => ACT().duplicatePart() }),
+          h("button", { type: "button", class: "btn-small danger", text: "Remove part", onclick: () => ACT().removePart() }));
+        const anim = h("div", { class: "prop-actions", role: "group", "aria-label": "Animate in one click" },
+          h("button", { type: "button", class: "btn-small", text: "Turntable (12 poses)", onclick: () => ACT().animate3D("turntable12") }),
+          h("button", { type: "button", class: "btn-small", text: "Bounce", onclick: () => ACT().animate3D("bounce") }),
+          h("button", { type: "button", class: "btn-small", text: "Wobble", onclick: () => ACT().animate3D("wobble") }));
+        sec.append(h("h3", { class: "field-heading", text: "Animate in one click" }), anim, h("h3", { class: "field-heading", text: "Add or remove parts" }), parts);
+      }
       const others = ED.doc.layers.filter((l) => !l.type && l.id !== L.id);
       if (others.length) {
         const id = "move-to";
@@ -654,6 +710,7 @@
     ED.on("images", renderStore);
     ED.on("pieces", async (e) => { await loadPieces(); if (e && e.open) storeCat = "pack:" + e.open; else if (!e) storeCat = storeCat; renderStore(); });
     ED.on("point-edit", () => { if (ED.selItem()) renderProps(); });
+    ED.on("part-select", () => { if (ED.selItem()) renderProps(); });
     ED.on("pose", () => { if (ED.selLayer() && ED.selLayer().cycle) renderProps(); });
     loadPieces().then(renderStore);
     $("#file-pack").addEventListener("change", (e) => { if (e.target.files[0]) ACT().importPack(e.target.files[0]); e.target.value = ""; });
