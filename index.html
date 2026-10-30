@@ -3,39 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Garden Study</title>
-<meta name="description" content="A real-time WebGL study of a looping stop-motion garden backdrop: layered parallax, stepped animation, boil and a soft, warm post stack.">
+<title>Elaborate Backgrounds</title>
+<meta name="description" content="Make looping stop-motion wallpapers in your browser: layers at real depths, paper, felt, clay and foliage, pose-by-pose animation, and loops that repeat without a seam.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23000000'/%3E%3Ctext x='16' y='23' font-family='Georgia, serif' font-size='19' font-weight='700' fill='%23D9A441' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/site.css">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,500..700,100,1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF7A59'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23FFC94A'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/landing.css">
 </head>
-<body>
+<body data-scene="lilac">
+<a class="skip" href="#how">Skip to the content</a>
 
-<main class="stage" id="stage">
-  <canvas id="scene" role="img" aria-label="A handmade-looking fantasy garden: lavender sky, rolling purple hills, a turquoise waterfall, dark trees framing the edges and swaying flowers in front."></canvas>
-  <img id="still" class="still" src="images/still.jpg" alt="A still of the garden scene: lavender sky, purple hills, a turquoise waterfall, framing trees and flowers in the foreground." hidden>
-  <noscript><img class="still" src="images/still.jpg" alt="A still of the garden scene: lavender sky, purple hills, a turquoise waterfall, framing trees and flowers in the foreground."></noscript>
+<header class="top">
+  <a class="brand" href="index.html" aria-label="Elaborate Backgrounds, home"><span class="brand-sun" aria-hidden="true"></span><span>Elaborate Backgrounds</span></a>
+  <nav class="top-nav" aria-label="Site">
+    <a href="#how">How it works</a>
+    <a href="#scenes">Scenes</a>
+    <a class="btn btn-primary btn-sm" href="editor.html">Open the editor</a>
+  </nav>
+</header>
 
-  <section class="caption" aria-labelledby="title">
-    <p class="eyebrow">Study · procedural art · real-time WebGL</p>
-    <h1 id="title">Garden study</h1>
-    <p class="note">Recreating the feel of a stop-motion backdrop on a podcast set, made by Tamara. Not affiliated with the show.</p>
-    <div class="controls">
-      <button class="btn" id="play" type="button" data-playing="false">
-        <svg class="icon icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
-        <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>
-        <span class="label">Play animation</span>
+<main>
+  <section class="stage hero" id="stage" aria-labelledby="title">
+    <!-- Shown at once, while the shaders compile; the live scene fades in over it. -->
+    <img id="poster" class="poster" src="images/lilac-falls.jpg" alt="" fetchpriority="high">
+    <canvas id="scene" role="img" aria-label="Lilac Falls, a handmade-looking garden: a two-tier waterfall pours off a purple clay cliff into a pool, a stream runs toward you under a little wooden footbridge, a blossom tree hung with wisteria stands on the right, felt clouds drift past a paper moon and two butterflies cross."></canvas>
+    <img id="still" class="still" src="images/lilac-falls.jpg" alt="A still of Lilac Falls: a two-tier waterfall, a pool and stream with a footbridge, a blossom tree hung with wisteria, felt clouds and a paper moon." hidden>
+    <noscript><img class="still" src="images/lilac-falls.jpg" alt="A still of Lilac Falls: a two-tier waterfall, a pool and stream with a footbridge, a blossom tree hung with wisteria, felt clouds and a paper moon."></noscript>
+
+    <div class="hero-text">
+      <h1 id="title">Stop-motion wallpapers, handmade in your browser</h1>
+      <p class="lede">Build a scene in layers out of paper, felt, clay and foliage. It loops every six seconds on a stop-motion beat, and you can take it with you as a wallpaper, a video or a live background.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="editor.html">Open the editor</a>
+        <a class="btn" href="editor.html?open=lilac">Open this scene in the editor</a>
+      </div>
+    </div>
+
+    <div class="hero-foot">
+      <button class="btn btn-round" id="play" type="button" data-playing="false">
+        <svg class="icon icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5v13M15.5 5.5v13"/></svg>
+        <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5l11 6.5-11 6.5z"/></svg>
+        <span class="label sr">Play animation</span>
       </button>
-      <a class="btn btn-quiet" href="editor.html">Make your own in the editor</a>
+      <p class="credit"><strong>Lilac Falls</strong>, this scene: procedural art written by Claude, after the feel of a stop-motion backdrop by Tamara.</p>
       <p class="status" id="status" role="status"></p>
     </div>
   </section>
 
-  <p class="stats" id="stats" hidden></p>
+  <section class="band" id="how" aria-labelledby="how-h">
+    <h2 id="how-h">How a scene is made</h2>
+    <p class="band-lede">The same recipe behind the scene above, as a tool.</p>
+    <ul class="cards">
+      <li class="card" style="--c: var(--sky)">
+        <span class="card-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5l9 4.8-9 4.8-9-4.8z M3 12.2l9 4.8 9-4.8M3 16.1l9 4.8 9-4.8"/></svg></span>
+        <h3>Layers at real depths</h3>
+        <p>Every layer stands at a depth, like the flats of a multiplane camera. Near layers drift further than far ones, so the scene breathes.</p>
+      </li>
+      <li class="card" style="--c: var(--coral)">
+        <span class="card-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-1 2-2 0-1.5-1.3-1.8-1.3-3 0-1 .9-1.7 2-1.7h2a3.8 3.8 0 0 0 3.8-3.8C20.5 6.6 16.6 3.5 12 3.5z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10" cy="7.3" r="1.1"/><circle cx="14.5" cy="7.3" r="1.1"/></svg></span>
+        <h3>Handmade materials</h3>
+        <p>Shapes are cut from paper, felt, clay, cardboard or clumped foliage, with rough edges, fiber fuzz and one warm light from the top left.</p>
+      </li>
+      <li class="card" style="--c: var(--lilac)">
+        <span class="card-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 5v14M16.5 5v14M3.5 9h4M3.5 13h4M3.5 17h4M16.5 9h4M16.5 13h4M16.5 17h4"/></svg></span>
+        <h3>Animated pose by pose</h3>
+        <p>Pieces move between poses on a stepped beat, the way stop motion is shot. 3D pieces are sculpted from clay parts and can turn, bounce or wobble.</p>
+      </li>
+      <li class="card" style="--c: var(--teal)">
+        <span class="card-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M10 8.5l5 2.5-5 2.5zM8 20.5h8M12 16.5v4"/></svg></span>
+        <h3>Loops without a seam</h3>
+        <p>Export a still, a video that loops exactly, or a live wallpaper: one file that plays the scene full screen.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section class="band" id="scenes" aria-labelledby="scenes-h">
+    <h2 id="scenes-h">Start from a scene</h2>
+    <p class="band-lede">Every piece of these opens in the editor, ready to move, recolor or delete.</p>
+    <ul class="scenes">
+      <li class="scene-card">
+        <a href="editor.html?open=lilac">
+          <img src="images/lilac-falls.jpg" alt="" loading="lazy">
+          <span class="scene-name">Lilac Falls</span>
+          <span class="scene-note">The scene above: water made the stop-motion way, from cellophane, cotton and resin.</span>
+        </a>
+      </li>
+      <li class="scene-card">
+        <a href="editor.html?open=beach">
+          <img src="docs/images/beach-day.jpg" alt="" loading="lazy">
+          <span class="scene-name">Beach day</span>
+          <span class="scene-note">A girl digging, waves, palms, gulls, a duck and a crab.</span>
+        </a>
+      </li>
+      <li class="scene-card">
+        <a href="study.html">
+          <img src="images/still.jpg" alt="" loading="lazy">
+          <span class="scene-name">The garden study</span>
+          <span class="scene-note">Where this started: a study of a stop-motion backdrop by Tamara.</span>
+        </a>
+      </li>
+    </ul>
+  </section>
+
+  <footer class="foot">
+    <p>Elaborate Backgrounds is a work in progress. The art in these scenes is procedural, written by Claude; nothing here is a photo or an AI-generated image. The original backdrop that inspired it was made by Tamara for a podcast set; this project isn't affiliated with the show.</p>
+  </footer>
 </main>
+
+<p class="stats" id="stats" hidden></p>
 
 <script src="js/gl.js" defer></script>
 <script src="js/clock.js" defer></script>
@@ -46,8 +122,9 @@
 <script src="js/items.js" defer></script>
 <script src="js/post.js" defer></script>
 <script src="js/renderer.js" defer></script>
-<script src="js/scenes/garden-art.js" defer></script>
-<script src="js/scenes/garden.js" defer></script>
+<script src="js/editor/library.js" defer></script>
+<script src="js/scenes/lilac-art.js" defer></script>
+<script src="js/scenes/lilac.js" defer></script>
 <script src="js/app.js" defer></script>
 </body>
 </html>

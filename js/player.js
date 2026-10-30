@@ -6,7 +6,7 @@
   Where the scene comes from, first match wins:
     an embedded <script type="application/json" id="scene-data">   (exported wallpapers)
     ?scene=path/to/scene.json                                        (any scene file on the same site)
-    ?sample=beach | garden                                           (the built-in scenes)
+    ?sample=beach | garden | lilac                                           (the built-in scenes)
 
   Options: ?controls=1 shows a pause button (use it when the page is a
   background behind other content), ?fps=12|8|6, ?quality=low, ?motion=1
@@ -33,6 +33,7 @@
       return res.json();
     }
     if (params.get("sample") === "garden" && LB.scenes && LB.scenes.garden) return LB.scenes.garden;
+    if (params.get("sample") === "lilac" && LB.scenes && LB.scenes.lilac) return LB.scenes.lilac();
     if (LB.scenes && LB.scenes.beach) return LB.scenes.beach();
     throw new Error("no scene to play");
   }

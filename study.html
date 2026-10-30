@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garden Study · Elaborate Backgrounds</title>
+<meta name="description" content="A real-time WebGL study of a looping stop-motion garden backdrop: layered parallax, stepped animation, boil and a soft, warm post stack.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23000000'/%3E%3Ctext x='16' y='23' font-family='Georgia, serif' font-size='19' font-weight='700' fill='%23D9A441' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body data-scene="garden">
+
+<main class="stage" id="stage">
+  <canvas id="scene" role="img" aria-label="A handmade-looking fantasy garden: lavender sky, rolling purple hills, a turquoise waterfall, dark trees framing the edges and swaying flowers in front."></canvas>
+  <img id="still" class="still" src="images/still.jpg" alt="A still of the garden scene: lavender sky, purple hills, a turquoise waterfall, framing trees and flowers in the foreground." hidden>
+  <noscript><img class="still" src="images/still.jpg" alt="A still of the garden scene: lavender sky, purple hills, a turquoise waterfall, framing trees and flowers in the foreground."></noscript>
+
+  <section class="caption" aria-labelledby="title">
+    <p class="eyebrow">Where this project started · procedural art · real-time WebGL</p>
+    <h1 id="title">Garden study</h1>
+    <p class="note">Recreating the feel of a stop-motion backdrop on a podcast set, made by Tamara. Not affiliated with the show.</p>
+    <div class="controls">
+      <button class="btn" id="play" type="button" data-playing="false">
+        <svg class="icon icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+        <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>
+        <span class="label">Play animation</span>
+      </button>
+      <a class="btn btn-quiet" href="index.html">Back to Elaborate Backgrounds</a>
+      <a class="btn btn-quiet" href="editor.html?open=study">Open it in the editor</a>
+      <p class="status" id="status" role="status"></p>
+    </div>
+  </section>
+
+  <p class="stats" id="stats" hidden></p>
+</main>
+
+<script src="js/gl.js" defer></script>
+<script src="js/clock.js" defer></script>
+<script src="js/materials.js" defer></script>
+<script src="js/elements.js" defer></script>
+<script src="js/shapes.js" defer></script>
+<script src="js/clay.js" defer></script>
+<script src="js/items.js" defer></script>
+<script src="js/post.js" defer></script>
+<script src="js/renderer.js" defer></script>
+<script src="js/scenes/garden-art.js" defer></script>
+<script src="js/scenes/garden.js" defer></script>
+<script src="js/app.js" defer></script>
+</body>
+</html>

@@ -109,11 +109,28 @@ Added after your review: groups inside layers, so several objects can share a la
 
 Not done: touch-sized handles, sharper zoom past 100% (layers are baked for the screen's height), groups inside groups, and per-group motion (motion and pose timing still belong to a layer).
 
-### 9. Original scenes, made in the editor
+### 9. Our own scene, and a landing page (built)
+
+**Lilac Falls** keeps the garden study's colors and mood but drops the study's layout, which followed Tamara's backdrop. In its place:
+- a stepped clay cliff with a two-tier waterfall on the left;
+- a pool running into a stream toward the viewer, under a footbridge;
+- one blossom tree hung with wisteria on the right;
+- felt clouds, a paper moon, butterflies and clay mushrooms.
+
+The water is made like stop-motion water and animated by replacement, six frames on 2s:
+- **Falls.** Each fall is two sheets of crinkled cellophane in strips of different blues. The streaks step down each frame, and creases and glints land somewhere new.
+- **Foam.** Pulled cotton wool, re-tufted each frame, with glass-bead spray above it.
+- **Pools and stream.** Poured resin, with clear ripple rings that grow one step a frame, painted gloss dashes, and streaks that step along the current.
+
+It's the landing page now (index.html). The study moved to study.html, unchanged. The sky leaves room for the title, and a still shows at once while the shaders compile.
+
+Not done: the shape shader's compile time. It's why the landing goes live about 1.5 s later than the study did.
+
+### 10. Original scenes, made in the editor
 
 Your 2 or 3 original scenes (vineyard at golden hour, redwoods in fog, tidepool, mushroom grove at night), built in the editor with your own materials. Building them is also the first real usability test, and anything awkward goes back into the editor.
 
-### 10. Portfolio packaging
+### 11. Portfolio packaging
 
 README, CASE-STUDY, Lighthouse numbers, recorded loops, and a short usability test with 3 to 5 people making a wallpaper from scratch.
 

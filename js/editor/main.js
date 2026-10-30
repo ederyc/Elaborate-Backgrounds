@@ -312,6 +312,7 @@
     file: () => [
       { label: "New scene…", icon: "file", run: () => LB.EXPORT.openNew() },
       { label: "Open a scene file…", icon: "open", keys: "Ctrl O", run: () => $("#file-open").click() },
+      ED.hasPrevious ? { label: "Reopen my last scene", icon: "reset", run: reopenPrevious } : null,
       { label: "Save the scene file", icon: "save", keys: "Ctrl S", run: () => LB.EXPORT.saveFile() },
       "-",
       { label: "Export…", icon: "export", keys: "Ctrl E", run: () => LB.EXPORT.openExport() },
@@ -364,14 +365,27 @@
       { label: "Keyboard shortcuts", icon: "keyboard", keys: "?", run: openKeys },
       { label: "Take the tour", icon: "help", run: () => tour(0) },
       "-",
-      { label: "Open the garden study", icon: "sky", run: () => (location.href = "index.html") },
+      { label: "Back to the landing page", icon: "sky", run: () => (location.href = "index.html") },
+      { label: "Open the garden study", icon: "flower", run: () => (location.href = "study.html") },
     ],
   };
+  // The scene that was kept aside when a sample was opened from the landing page.
+  async function reopenPrevious() {
+    try {
+      const prev = await LB.DOC.loadLocal("previous");
+      if (!prev) return;
+      ED.load(prev.doc, "Open");
+      ED.history.commit("Reopen my last scene");
+      ED.emit("status", { msg: `Reopened ${prev.doc.title}.`, tone: "ok" });
+    } catch {
+      ED.emit("status", { msg: "That scene couldn't be read back from this browser.", tone: "error" });
+    }
+  }
   let openMenuKey = null;
   function openMenuFor(btn) {
     const key = btn.dataset.menu;
     openMenuKey = key;
-    const el = menu(MENUS[key](), { anchor: btn, label: `${btn.textContent} menu` });
+    const el = menu(MENUS[key]().filter(Boolean), { anchor: btn, label: `${btn.textContent} menu` });
     // Left and right move to the next menu, the way a desktop menubar does.
     el.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -576,7 +590,23 @@
     } catch (err) {
       console.warn("No saved scene", err);
     }
-    const restored = !!first;
+    let restored = !!first;
+    // editor.html?open=lilac (or beach, study) opens a sample, as the landing page's links do. A scene
+    // already saved here is kept aside first, so the sample's autosave can't overwrite it.
+    const SAMPLES = { lilac: ["Lilac Falls", () => LB.DOC.fromLilac()], beach: ["Beach day", () => LB.DOC.fromBeach()], study: ["the garden study", () => LB.DOC.fromStudy()] };
+    const want = SAMPLES[new URLSearchParams(location.search).get("open")];
+    let openedSample = null;
+    if (want) {
+      if (first) { try { await LB.DOC.saveLocal(first, "previous"); ED.hasPrevious = true; } catch {} }
+      first = want[1]();
+      warnings = [];
+      restored = false;
+      openedSample = want[0];
+      // A reload shouldn't open the sample again over the work done since.
+      history.replaceState(null, "", location.pathname);
+    } else {
+      try { ED.hasPrevious = !!(await LB.DOC.loadLocal("previous")); } catch {}
+    }
     if (!first) first = LB.DOC.fromBeach();
     clock = LB.createClock(first.fps || 12);
     ED.renderer = renderer;
@@ -621,6 +651,7 @@
     LB.CANVAS.fit();
     updateFps();
     if (warnings.length) ED.emit("status", { msg: warnings.join(" "), tone: "warn" });
+    else if (openedSample) ED.emit("status", { msg: `Opened ${openedSample}. Click any piece to see how it's made.${ED.hasPrevious ? " The scene you had open is kept: File, Reopen my last scene." : ""}`, timeout: 8000 });
     else ED.emit("status", { msg: restored ? "Opened your last scene from this browser." : "This is Beach day, the sample scene. Click any piece to see how it's made, or start fresh with File, New scene." });
     setSave(restored ? "saved" : "dirty", restored ? "Saved in this browser" : "Not saved yet");
 

@@ -178,7 +178,7 @@
   // ---------- live wallpaper ----------
   // The same scripts player.html loads, in order. They're read from this site and written inline.
   const PLAYER_SCRIPTS = ["js/gl.js", "js/clock.js", "js/materials.js", "js/elements.js", "js/shapes.js", "js/clay.js", "js/items.js", "js/post.js", "js/renderer.js",
-    "js/scenes/garden-art.js", "js/editor/doc.js", "js/player.js"];
+    "js/scenes/garden-art.js", "js/scenes/lilac-art.js", "js/editor/doc.js", "js/player.js"];
   const esc = (t) => t.replace(/<\/(script)/gi, "<\\/$1");
   async function exportLiveWallpaper() {
     try {
@@ -336,11 +336,12 @@ ${sources.map(([src, text]) => `<script data-src="${src}">\n${esc(text)}\n</scri
       const t = e.target.closest("[data-template]");
       if (!t) return;
       const kind = t.dataset.template;
-      const doc = kind === "study" ? LB.DOC.fromStudy() : kind === "beach" ? LB.DOC.fromBeach() : LB.DOC.blankDoc(+t.dataset.aspect || LB.DOC.A);
+      const doc = kind === "study" ? LB.DOC.fromStudy() : kind === "beach" ? LB.DOC.fromBeach() : kind === "lilac" ? LB.DOC.fromLilac() : LB.DOC.blankDoc(+t.dataset.aspect || LB.DOC.A);
       dlgNew.close();
       ED.load(doc, "New scene");
       say({ study: "Opened the garden study. Every piece of it can be moved, changed or deleted.",
         beach: "Opened the Beach day sample. Every piece is an editor shape; click one to see how it's made.",
+        lilac: "Opened Lilac Falls. The water, cliff, sky and hills are bespoke art; everything else is the editor's own pieces.",
         blank: "New scene. Draw with the shape tools or add pieces from the store." }[kind]);
     });
 

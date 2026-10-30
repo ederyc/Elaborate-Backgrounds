@@ -686,7 +686,7 @@ body.is-scrubbing, body.is-scrubbing * { cursor: ew-resize !important; user-sele
 .tip kbd { padding: 2px 5px; border-radius: 5px; background: rgba(255,255,255,.14); color: var(--tipink); white-space: nowrap; }
 
 /* ===================== dialogs ===================== */
-.dlg { width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 40px); padding: 0; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--tray); color: var(--ink); box-shadow: var(--shadow-pop); overflow: auto; }
+.dlg { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 40px); padding: 0; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--tray); color: var(--ink); box-shadow: var(--shadow-pop); overflow: auto; }
 .dlg[open] { animation: dlg-in 0.32s var(--spring); }
 .dlg-wide { width: min(780px, calc(100vw - 32px)); }
 .dlg::backdrop { background: rgba(10, 6, 18, 0.55); backdrop-filter: blur(4px); }
@@ -695,7 +695,7 @@ body.is-scrubbing, body.is-scrubbing * { cursor: ew-resize !important; user-sele
 .dlg-note { margin: 0 22px 14px; color: var(--ink-3); font-size: 13px; }
 .dlg-sub { margin: 18px 22px 10px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-.templates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 22px; }
+.templates { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding: 0 22px; }
 .tcard { display: grid; gap: 4px; padding: 8px 8px 12px; border: 1px solid var(--line-soft); border-radius: 18px; background: var(--raise); text-align: left; color: var(--ink); transition: transform 0.25s var(--spring), box-shadow 0.2s; }
 .tcard img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; transition: transform 0.4s var(--ease); }
 .tcard:hover { transform: translateY(-3px) rotate(-0.6deg); box-shadow: 0 12px 26px var(--sh-soft); }

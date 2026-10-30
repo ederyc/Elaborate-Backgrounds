@@ -124,6 +124,11 @@
     return normalize(LB.scenes.beach()).doc;
   }
 
+  // Lilac Falls, the project's own scene (the landing page).
+  function fromLilac() {
+    return normalize(LB.scenes.lilac()).doc;
+  }
+
   function fromStudy() {
     const g = clone(LB.scenes.garden);
     g.title = "Garden study";
@@ -382,20 +387,21 @@
       req.onerror = () => reject(req.error);
     });
   }
-  async function saveLocal(doc) {
+  // "key" is "current" for the autosave, or "previous" for the scene kept aside when a sample is opened from the landing page.
+  async function saveLocal(doc, key = KEY) {
     const db = await idb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put(serialize(doc), KEY);
+      tx.objectStore(STORE).put(serialize(doc), key);
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
     });
     db.close();
   }
-  async function loadLocal() {
+  async function loadLocal(key = KEY) {
     const db = await idb();
     const text = await new Promise((resolve, reject) => {
-      const req = db.transaction(STORE).objectStore(STORE).get(KEY);
+      const req = db.transaction(STORE).objectStore(STORE).get(key);
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
@@ -515,6 +521,6 @@
     return moved;
   }
 
-  LB.DOC = { mergeProblem, mergeLayers, groupId, cycleText, FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, normalize, serialize, saveLocal, loadLocal,
+  LB.DOC = { mergeProblem, mergeLayers, groupId, cycleText, FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, fromLilac, normalize, serialize, saveLocal, loadLocal,
     dbAll, dbPut, PACK_FORMAT, normalizePiece, normalizePack };
 })();

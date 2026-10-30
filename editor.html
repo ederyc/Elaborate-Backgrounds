@@ -21,7 +21,7 @@
 <!-- ===================== top bar ===================== -->
 <header class="topbar">
   <h1 class="sr">Backdrop Editor</h1>
-  <a class="logo" href="index.html" data-tip="Back to the garden study"><span class="logo-sun" aria-hidden="true"></span><span class="sr">Back to the garden study</span></a>
+  <a class="logo" href="index.html" data-tip="Back to Elaborate Backgrounds"><span class="logo-sun" aria-hidden="true"></span><span class="sr">Back to Elaborate Backgrounds</span></a>
   <div class="doc">
     <label class="sr" for="doc-title">Scene name</label>
     <input id="doc-title" class="doc-title" type="text" maxlength="80" value="Untitled scene" autocomplete="off" spellcheck="false">
@@ -178,6 +178,11 @@
   <div class="dlg-head"><h2 id="dlg-new-h">New scene</h2><button type="button" class="ibtn" data-close aria-label="Close" data-icon="close"></button></div>
   <p class="dlg-note">This replaces the scene you have open. If you want to keep it, use File, Save the scene file first.</p>
   <div class="templates">
+    <button type="button" class="tcard" data-template="lilac">
+      <img src="images/lilac-falls.jpg" alt="" loading="lazy" decoding="async">
+      <span class="tcard-name">Lilac Falls</span>
+      <span class="tcard-note">The project's own scene: falls, a pool and stream, a blossom tree, butterflies.</span>
+    </button>
     <button type="button" class="tcard" data-template="beach">
       <img src="docs/images/beach-day.jpg" alt="" loading="lazy" decoding="async">
       <span class="tcard-name">Beach day</span>
@@ -268,11 +273,13 @@
 <script src="js/post.js" defer></script>
 <script src="js/renderer.js" defer></script>
 <script src="js/scenes/garden-art.js" defer></script>
+<script src="js/scenes/lilac-art.js" defer></script>
 <script src="js/scenes/garden.js" defer></script>
 <script src="js/editor/ui.js" defer></script>
 <script src="js/editor/doc.js" defer></script>
 <script src="js/editor/library.js" defer></script>
 <script src="js/scenes/beach.js" defer></script>
+<script src="js/scenes/lilac.js" defer></script>
 <script src="js/editor/fields.js" defer></script>
 <script src="js/editor/actions.js" defer></script>
 <script src="js/editor/layers.js" defer></script>
