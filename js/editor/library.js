@@ -7,16 +7,17 @@
   are built around (0, 0) and placed by moving them, so the same entry
   works anywhere in the frame.
 
-  Credits are honest: the starter pieces are procedural code (the study's
-  elements, and the shape element), written by Claude. Nothing here is a
-  photo or an AI-generated image. A person's own pictures are marked as theirs.
+  Each piece says where it comes from: the starter pieces are procedural
+  (the study's elements, the sample scenes' pieces, and the shape element).
+  Nothing here is a photo or comes from an image-generation model. A
+  person's own pictures are marked as theirs.
 */
 (function () {
   const LB = (window.LB = window.LB || {});
   const A = 16 / 9;
-  const STUDY = "Procedural, from the garden study (code by Claude)";
-  const SHAPE = "Procedural shape (code by Claude)";
-  const CLAY3D = "Procedural 3D sculpt (code by Claude)";
+  const STUDY = "Procedural, from the garden study";
+  const SHAPE = "Procedural shape";
+  const CLAY3D = "Procedural 3D sculpt";
 
   // ---- 3D sculpts: parts in scene units around the piece's center (x right, y down, z toward you) ----
   const sph = (at, r, color, o = {}) => ({ kind: "sphere", at, r, color, ...o });
@@ -132,9 +133,9 @@
     { id: "leaf", cat: "Flowers", name: "Leaf", credit: STUDY, layer: sprite(null, ["#2E8F45", "#73D67A", "#B8F0A8"], { size: 0.017, anim: { type: "sway", amp: 0.06, phase: 1, speed: 2 } }) },
 
     // ---- beach (from the Beach day sample) ----
-    { id: "palm", cat: "Beach", name: "Palm tree", credit: "Procedural, from Beach day (code by Claude)", layer: (at) => LB.BEACH.palm(at) },
-    { id: "umbrella", cat: "Beach", name: "Beach umbrella", credit: "Procedural, from Beach day (code by Claude)", layer: (at) => LB.BEACH.umbrella(at) },
-    { id: "seagull", cat: "Beach", name: "Seagull flying by", credit: "Procedural, from Beach day (code by Claude)", layer: (at) => LB.BEACH.gull(at) },
+    { id: "palm", cat: "Beach", name: "Palm tree", credit: "Procedural, from Beach day", layer: (at) => LB.BEACH.palm(at) },
+    { id: "umbrella", cat: "Beach", name: "Beach umbrella", credit: "Procedural, from Beach day", layer: (at) => LB.BEACH.umbrella(at) },
+    { id: "seagull", cat: "Beach", name: "Seagull flying by", credit: "Procedural, from Beach day", layer: (at) => LB.BEACH.gull(at) },
     { id: "towel", cat: "Beach", name: "Striped towel", credit: SHAPE, item: () => LB.BEACH.towel([0, 0]) },
 
     // ---- 3D (clay, felt and plastic sculpts) ----

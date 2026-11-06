@@ -209,7 +209,7 @@
     return {
       format: "elaborate-backgrounds/scene", version: 1,
       title: "Lilac Falls",
-      note: "The project's own scene, after the feel of a stop-motion backdrop by Tamara. Procedural, written by Claude.",
+      note: "The project's own scene, by Eder Yepez Cuevas. Procedural: every piece is drawn by code.",
       art: "lilac",
       aspect: A, focus: [0.56, 0.5],
       background: "#2A1C33", horizon: "#CDB8F5",

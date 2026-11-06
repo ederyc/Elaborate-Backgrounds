@@ -17,6 +17,7 @@
 <header class="top">
   <a class="brand" href="index.html" aria-label="Elaborate Backgrounds, home"><span class="brand-sun" aria-hidden="true"></span><span>Elaborate Backgrounds</span></a>
   <nav class="top-nav" aria-label="Site">
+    <a href="#recent" id="nav-recent" hidden>Your scenes</a>
     <a href="#how">How it works</a>
     <a href="#scenes">Scenes</a>
     <a class="btn btn-primary btn-sm" href="editor.html">Open the editor</a>
@@ -35,7 +36,7 @@
       <h1 id="title">Stop-motion wallpapers, handmade in your browser</h1>
       <p class="lede">Build a scene in layers out of paper, felt, clay and foliage. It loops every six seconds on a stop-motion beat, and you can take it with you as a wallpaper, a video or a live background.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="editor.html">Open the editor</a>
+        <a class="btn btn-primary" id="cta-open" href="editor.html">Open the editor</a>
         <a class="btn" href="editor.html?open=lilac">Open this scene in the editor</a>
       </div>
     </div>
@@ -46,9 +47,17 @@
         <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5l11 6.5-11 6.5z"/></svg>
         <span class="label sr">Play animation</span>
       </button>
-      <p class="credit"><strong>Lilac Falls</strong>, this scene: procedural art written by Claude, after the feel of a stop-motion backdrop by Tamara.</p>
+      <p class="credit"><strong>Lilac Falls</strong>, by Eder Yepez Cuevas. Every piece is drawn by code, in real time.</p>
       <p class="status" id="status" role="status"></p>
     </div>
+  </section>
+
+  <section class="band" id="recent" aria-labelledby="recent-h" hidden>
+    <h2 id="recent-h">Pick up where you left off</h2>
+    <p class="band-lede">Your scenes, saved in this browser as you work.</p>
+    <ul class="scenes" id="recent-list"></ul>
+    <p class="recent-notice" id="recent-notice" role="status"></p>
+    <button class="btn btn-sm" id="recent-more" type="button" hidden></button>
   </section>
 
   <section class="band" id="how" aria-labelledby="how-h">
@@ -90,6 +99,13 @@
         </a>
       </li>
       <li class="scene-card">
+        <a href="editor.html?open=reef">
+          <img src="images/reef-rave.jpg" alt="" loading="lazy">
+          <span class="scene-name">Reef Rave</span>
+          <span class="scene-note">An octopus party in an underwater cave, under a sweeping laser rig.</span>
+        </a>
+      </li>
+      <li class="scene-card">
         <a href="editor.html?open=beach">
           <img src="docs/images/beach-day.jpg" alt="" loading="lazy">
           <span class="scene-name">Beach day</span>
@@ -100,14 +116,14 @@
         <a href="study.html">
           <img src="images/still.jpg" alt="" loading="lazy">
           <span class="scene-name">The garden study</span>
-          <span class="scene-note">Where this started: a study of a stop-motion backdrop by Tamara.</span>
+          <span class="scene-note">Where this started: a study of a stop-motion backdrop seen on a podcast set.</span>
         </a>
       </li>
     </ul>
   </section>
 
   <footer class="foot">
-    <p>Elaborate Backgrounds is a work in progress. The art in these scenes is procedural, written by Claude; nothing here is a photo or an AI-generated image. The original backdrop that inspired it was made by Tamara for a podcast set; this project isn't affiliated with the show.</p>
+    <p>Elaborate Backgrounds is a work in progress by Eder Yepez Cuevas: concept, art direction and design. The code was written with help from Claude, Anthropic's AI coding assistant. Every picture here is drawn by code in real time, with no photos and no image-generation models. The garden study recreates the feel of a stop-motion backdrop seen on a podcast set, whose maker I don't know; this project isn't affiliated with the show.</p>
   </footer>
 </main>
 
@@ -126,5 +142,7 @@
 <script src="js/scenes/lilac-art.js" defer></script>
 <script src="js/scenes/lilac.js" defer></script>
 <script src="js/app.js" defer></script>
+<script src="js/saves.js" defer></script>
+<script src="js/home.js" defer></script>
 </body>
 </html>

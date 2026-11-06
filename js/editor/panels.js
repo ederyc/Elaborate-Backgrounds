@@ -295,6 +295,7 @@
       { type: "section", id: "depth", label: "Depth", icon: "depth", color: depthColor(L.depth) },
       { key: "depth", label: "Depth", type: "range", min: 0, max: 1, step: 0.01, scale: 100, suffix: "%", hint: "0 is far away, 100 is right by the camera. Nearer layers slide more when the camera drifts." },
       { key: "far", label: "Soften with distance", type: "toggle" },
+      { key: "near", label: "Out of focus, right by the lens", type: "toggle", hint: "Drawn on top of everything and blurred hard, like something too close for the camera. The Look tab's Depth softness sets how much." },
       { key: "haze", label: "Haze toward the horizon", type: "range", ...PCT, max: 0.5, fallback: 0, reset: 0 },
       { key: "boil", label: "Boil", type: "range", min: 0, max: 4, step: 0.1, fallback: 1, reset: 1, suffix: " px", hint: "How far the layer wobbles each beat, on a 1080-pixel-tall screen." },
       { key: "opacity", label: "Opacity", type: "range", ...PCT, fallback: 1, reset: 1 },
@@ -397,6 +398,7 @@
 
       { type: "section", id: "look-depth", label: "Depth softness", icon: "depth", color: "var(--sky)", toggle: pass("depth"), collapsed: true },
       { key: "post.depth.radius", label: "Blur on far layers", type: "range", min: 0, max: 4, step: 0.05, suffix: " px" },
+      { key: "post.depth.near", label: "Blur on layers by the lens", type: "range", min: 0, max: 40, step: 0.5, suffix: " px" },
 
       { type: "section", id: "look-halation", label: "Halation", icon: "sparkle", color: "var(--coral)", toggle: pass("halation"), collapsed: true },
       { key: "post.halation.amount", label: "Warm fringe", type: "range", min: 0, max: 1.5, step: 0.01, scale: 100, suffix: "%" },
@@ -412,6 +414,11 @@
       { type: "section", id: "look-grain", label: "Grain", icon: "film", color: "var(--pink)", toggle: pass("grain"), collapsed: true },
       { key: "post.grain.amount", label: "Grain", type: "range", min: 0, max: 0.12, step: 0.002, scale: 1000, format: (v) => (v * 100).toFixed(1) },
       { key: "post.grain.perFrame", label: "Changes every frame, not every beat", type: "toggle" },
+
+      { type: "section", id: "look-sway", label: "Tipsy camera", icon: "eye", color: "var(--pink)", toggle: pass("sway"), collapsed: true },
+      { key: "post.sway.amount", label: "Sway", type: "range", ...PCT, hint: "The whole frame leans and breathes, a step on each beat. Still while the editor is paused." },
+      { key: "post.sway.ghost", label: "Double vision", type: "range", ...PCT },
+      { key: "post.sway.edges", label: "Blurry edges", type: "range", ...PCT, hint: "Uses the bloom's blur, so it needs Bloom and mist on." },
 
       { type: "section", id: "look-scene", label: "Scene", icon: "sky", color: "var(--teal)" },
       { key: "background", label: "Behind everything", type: "color" },

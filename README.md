@@ -11,6 +11,7 @@ Looping stop-motion backgrounds in the browser:
   Its water is made the way stop-motion water is made, and swapped frame by frame on 2s ([js/scenes/lilac-art.js](js/scenes/lilac-art.js)):
   - the falls are crinkled cellophane, with cotton-wool foam and glass-bead spray;
   - the pools are poured resin, with clear ripple rings and painted gloss.
+- **Reef Rave**, a sample scene ([js/scenes/reef.js](js/scenes/reef.js)): an octopus party in an underwater cave. A laser rig sweeps its beams by replacement frames, neon corals glow on the rock, and a crowd of felt octopuses bounces at 120 beats a minute, each dancer its own group. In front, a clay octopus in white sunglasses. It's seen from inside the party: the lights change color every quarter second, partygoers and string lights right by the lens are out of focus, and the camera leans and sees double.
 - **The garden study** ([study.html](study.html)), where this started. A real-time WebGL2 recreation of the feel of a looping stop-motion backdrop: a handmade-looking fantasy garden with a waterfall, swaying flowers and a soft, warm, fuzzy filter. It's built as layered parallax quads on a stepped stop-motion clock, with a post stack on top.
 - **The editor** ([editor.html](editor.html)). The study's recipe, turned into a tool for making your own wallpapers: layers at depths, ready-made pieces from a store, shapes you cut and texture yourself, and the whole look as switches and sliders. It exports PNG stills, video loops and scene files.
 - **Beach day**, the editor's sample scene ([js/scenes/beach.js](js/scenes/beach.js)). A girl in a sun hat scoops sand into her bucket while waves roll in, palms sway, gulls fly past and a boardwalk crowd chatters in cardboard quote marks. Every piece is an ordinary editor shape, so all of it can be opened and changed.
@@ -19,7 +20,11 @@ Looping stop-motion backgrounds in the browser:
 
 ![Beach day, one frame of the 6-second loop](docs/images/beach-day.jpg)
 
-**The study is a study.** The original backdrop was made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it. The study's art is entirely procedural (shader code, no images), written by Claude at my direction. So are the editor's starter pieces, which say so in the store, and the two sample scenes: Beach day, which Claude built from the editor's own pieces, and Lilac Falls, which keeps the study's colors and mood in a layout of its own. My own scenes and materials, photographed and drawn by me, come next and are the actual portfolio piece.
+**Credits.** Concept, creative direction, art direction and design by Eder Yepez Cuevas, across every phase: the scenes, the look, the editor's interface and every decision behind them. The code was written with help from Claude, Anthropic's AI coding assistant.
+
+**The study is a study.** It recreates the feel of a looping stop-motion backdrop seen on a podcast set. I don't know who made the original backdrop; if I find out, they'll be credited here. The show isn't named here, and I'm not affiliated with it. Lilac Falls, the landing page's scene, keeps the study's colors and mood in a layout of its own.
+
+Every picture in the project is drawn by code in real time: no photos and no image-generation models. My own photographed and hand-drawn materials come next.
 
 Status: phases 1 to 6 are done: the analysis, the rendering skeleton, the study, the first version of the editor, the customizer and store (drawing and editing outlines, animating pose by pose, cut-outs from photos, real boil, My pieces and packs), 3D pieces sculpted from clay, felt or plastic parts, and wallpaper output (exact video loops, a live wallpaper file and player, and scenes in any screen shape). What's left is in [docs/PLAN.md](docs/PLAN.md). The write-up of the look is in [docs/RECIPE.md](docs/RECIPE.md).
 
@@ -30,7 +35,7 @@ There's no build step and no dependencies. Serve the folder with any static serv
 ```sh
 python -m http.server
 # then open http://localhost:8000 for the landing page, /study.html for the garden study,
-# /editor.html for the editor (?open=lilac, beach or study opens a sample),
+# /editor.html for the editor (?open=lilac, beach or study opens a sample, ?scene=id a saved scene),
 # or /player.html for the player (?sample=lilac or garden, ?scene=file.json, &controls=1)
 ```
 
@@ -118,13 +123,23 @@ The first time, it opens the Beach day sample, with a short tour. **File, New sc
   - On the canvas, the arrows move the selection (add Shift to move further), Delete removes it and Escape deselects.
   - [ and ] move the selection backward or forward. , and . step through poses.
 - **Screen shapes.** **New scene** makes a blank scene for a desktop (16:9), an ultrawide (21:9), a laptop (16:10), a square or a phone (tall). In Look, two sliders set where a crop centers; press G to see the crops.
-- **Saving and exporting.** The scene autosaves in this browser; the chip by its name shows when. **File, Save the scene file** downloads a .json scene file (format in [docs/SCENE-FORMAT.md](docs/SCENE-FORMAT.md)), with your pictures embedded. **Export** offers four things:
+- **Saving and exporting.** Each scene you change is saved in this browser as its own entry; the chip by its name shows when. Your saved scenes appear on the home page under *Pick up where you left off* and in **File, Recent scenes**, with a picture and when you last edited them. Looking at a sample without changing it saves nothing. **File, Save the scene file** downloads a .json scene file (format in [docs/SCENE-FORMAT.md](docs/SCENE-FORMAT.md)), with your pictures embedded. **Export** offers four things:
   - a PNG, at sizes that fit the scene listed first;
   - an MP4 video of one, 2 or 5 loops, rendered beat by beat so it loops exactly;
   - a **live wallpaper**: one self-contained HTML file that plays the scene full screen, for apps that use a web page as a wallpaper, or as a page background;
   - the scene file.
 
 ## Quality checks
+
+The repeatable checks live in [tests/run.mjs](tests/run.mjs). They drive a real browser, with nothing to install, and leave no files behind:
+
+```
+node tests/run.mjs                 # every suite
+node tests/run.mjs saves export    # only these suites
+node tests/run.mjs pages --edge    # in Edge instead of Chrome
+```
+
+The latest run passed 87 of 92 checks, and all 5 failures are one known bug: the small buttons that expand a layer's pieces. The full results and what they don't prove are in [docs/TESTING.md](docs/TESTING.md). The older measurements below were taken as each phase was built.
 
 Measured in Chrome 156 on this laptop (Intel Iris Xe, integrated graphics), driven by scripts through the DevTools protocol.
 
@@ -157,7 +172,7 @@ Measured in Chrome 156 on this laptop (Intel Iris Xe, integrated graphics), driv
 | Older suites, rerun on the new interface | Phase 5 (pen, points, poses, cut-out, boil, packs), phase 6 (3D parts, turntable), Beach day, screen shapes, the garden study, the exact video loop (1920 × 1080: 6.000 s, 72 frames) and the live wallpaper (12 draws a second; pauses fully) all give the same results as before |
 | The study page after this phase | Pixel-identical to the last commit at `?t=2.5` |
 | The landing page, scripted | It plays Lilac Falls, and the pause button stops it. Reduced motion doesn't autoplay. On a 390 px phone there's no sideways scroll, and the crop centers on the falls. axe found no violations, and there were no console errors. |
-| Opening a sample from the landing page | `editor.html?open=lilac` opened Lilac Falls and kept the scene already saved in the browser. File, Reopen my last scene brought it back. The URL clears, so a reload doesn't reopen the sample over new work. |
+| Opening a sample from the landing page | `editor.html?open=lilac` opens Lilac Falls and leaves every saved scene alone. The first edit saves it as a scene of its own, and the address changes to that scene, so a reload comes back to the work. |
 | Lilac Falls as a file | Saves and reopens with identical text and no warnings. A live wallpaper of it (432 KB) carries its own art and plays on its own from another folder. `player.html?sample=lilac` plays it. |
 | Lilac Falls, how fast it shows, on this laptop's Iris Xe | Two runs each: the new landing painted its first and largest content at 1.4 s and went live at 3.9 to 4.5 s. The old landing (the study) painted at 0.8 s and went live at 2.4 to 2.6 s. The poster lines up with the live scene: mean difference 4 of 255 at 1600 × 900 and at 390 × 844. |
 | What makes it slower | Compiling the shape shader, about 2 s on its own. The study never used shapes; Lilac Falls needs them for its clouds, bridge, lily pads and butterflies. Splitting that shader by material would help the editor too. Drawing a frame once it's live: 0.7 to 0.9 ms p95. |
@@ -192,6 +207,8 @@ study.html                 The garden study page, caption and play/pause control
 css/landing.css            The landing page's look (the editor's Studio palette)
 js/scenes/lilac.js         Lilac Falls as a scene file builder: layers, pieces, grade
 js/scenes/lilac-art.js     Lilac Falls' bespoke art: sky and moon, hills, the clay cliff, the cellophane falls, the resin water
+js/scenes/reef.js          Reef Rave as a scene file builder: corals, the octopus crowd (one group per dancer), the star
+js/scenes/reef-art.js      Reef Rave's bespoke art: the cave and its light, the sea floor, the laser rig
 editor.html                The editor
 player.html                The player: a scene full screen, as a wallpaper or a page background
 css/tokens.css             The portfolio's tokens (copied from Resume/css/style.css)
@@ -209,8 +226,10 @@ js/renderer.js             Baking (only what changed), compositing, parallax, bo
 js/scenes/garden.js        The study as data: layers, depth, motion, grades
 js/scenes/garden-art.js    The study's bespoke shaders (sky, clouds, hills, waterfall...)
 js/scenes/beach.js         The Beach day sample, built from editor shapes in a one-point perspective
+js/saves.js                The scenes saved in this browser, shared by the editor and the home page
+js/home.js                 The home page's Pick up where you left off section
 js/app.js                  The landing and study pages: boot, reduced motion, pause when hidden, the poster, fallbacks
-js/editor/doc.js           The scene document: checking files, look presets, undo, autosave
+js/editor/doc.js           The scene document: checking files, look presets, undo, load  e
 js/editor/library.js       The store's pieces and their credits
 js/editor/actions.js       Editing actions shared by panels, canvas and keys
 js/editor/ui.js            Shared interface pieces: icons, toasts, menus, tooltips, motion helpers, depth colors

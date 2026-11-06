@@ -85,6 +85,8 @@ uniform vec3 uFloor, uShadowTint, uHighTint;
 uniform float uCa, uVig, uGrain, uGrainSeed;
 uniform vec3 uVigColor;
 uniform vec2 uRes;
+uniform vec4 uSway;  // lean (radians), zoom, double-vision offset
+uniform float uGhost, uEdge;
 out vec4 outColor;
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
@@ -94,19 +96,34 @@ float hash(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
+vec3 fringed(sampler2D t, vec2 uv, vec2 off) {
+  return uOn.w > 0.5 ? vec3(texture(t, uv + off).r, texture(t, uv).g, texture(t, uv - off).b) : texture(t, uv).rgb;
+}
+
 void main() {
   vec2 uv = vUv;
+  // Tipsy camera: lean and zoom about the middle, in screen proportions so nothing skews.
+  if (uSway.y != 1.0 || uSway.x != 0.0) {
+    vec2 asp = vec2(uRes.x / uRes.y, 1.0);
+    vec2 q = (uv - 0.5) * asp / uSway.y;
+    float c = cos(uSway.x), s = sin(uSway.x);
+    uv = vec2(c * q.x - s * q.y, s * q.x + c * q.y) / asp + 0.5;
+  }
   vec2 fromC = uv - 0.5;
-  vec3 col, bl;
-  if (uOn.w > 0.5) {
-    vec2 off = fromC * length(fromC) * uCa * 8.0;
-    col = vec3(texture(uScene, uv + off).r, texture(uScene, uv).g, texture(uScene, uv - off).b);
-    bl = vec3(texture(uBloom, uv + off).r, texture(uBloom, uv).g, texture(uBloom, uv - off).b);
-  } else {
-    col = texture(uScene, uv).rgb;
-    bl = texture(uBloom, uv).rgb;
+  vec2 off = fromC * length(fromC) * uCa * 8.0;
+  vec3 col = fringed(uScene, uv, off);
+  vec3 bl = fringed(uBloom, uv, off);
+  if (uGhost > 0.0) {
+    // Double vision: a second, offset copy of the frame.
+    col = mix(col, fringed(uScene, uv + uSway.zw, off), uGhost);
+    bl = mix(bl, fringed(uBloom, uv + uSway.zw, off), uGhost);
   }
   bl /= uBloomNorm;
+  // Blurry edges: toward the sides the frame gives way to its own blurred copy (the bloom chain's).
+  if (uEdge > 0.0) {
+    float e = smoothstep(0.18, 0.62, length(fromC * vec2(uRes.x / uRes.y, 1.0) * 0.75));
+    col = mix(col, bl, e * uEdge);
+  }
 
   if (uOn.x > 0.5) {
     col += uGlow * max(bl - uThreshold, 0.0) / max(1.0 - uThreshold, 0.01);
@@ -154,5 +171,5 @@ void main() {
 
   LB.POST_GLSL = { COPY, BLUR, DOWN, UP, FINAL };
   // The order the stages switch on in, for "?upto=" and the screenshots.
-  LB.PASSES = ["depth", "bloom", "halation", "grade", "ca", "vignette", "grain"];
+  LB.PASSES = ["depth", "bloom", "halation", "grade", "ca", "vignette", "grain", "sway"];
 })();

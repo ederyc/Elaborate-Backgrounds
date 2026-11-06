@@ -1,6 +1,6 @@
 # Recipe: the garden backdrop study
 
-*This is a study of a looping backdrop made by Tamara for a podcast set. The show isn't named here, and I'm not affiliated with it or with her. The study is the learning step. The original scenes I make afterwards are the actual project.*
+*This is a study of a looping stop-motion backdrop seen on a podcast set. I don't know who made the original; if I find out, they'll be credited here. The show isn't named here, and I'm not affiliated with it. The study is the learning step. The original scenes I make afterwards are the actual project.*
 
 This document has three parts. The first is the look-dev analysis: what's in the scene, what colors it actually uses, how it moves and which ingredients make it look the way it does. Everything in that half comes from three screenshots, so each claim is marked with how sure I can be about it. The second half, [Building the study](#building-the-study), covers what happened when I built it: the pass-by-pass screenshots, the measured comparison with the reference, and what changed from the hypothesis. The last, [The recipe in plain steps](#the-recipe-in-plain-steps), is the method on its own, as you'd follow it in the editor.
 
@@ -133,16 +133,16 @@ Nothing here is measured yet. This is what the scene's contents suggest, ordered
 ## Open questions
 
 1. **A short clip.** 10–30 seconds of the backdrop, recorded from an episode, kept in `reference/` and never committed. It would turn the motion section from a guess into measurements: animation rate, loop length, sway amplitudes, waterfall cycle length. Until then, the build uses the starting values above.
-2. ~~Credit.~~ Resolved: the backdrop is Tamara's work, credited at the top of this file and on the page. The show stays unnamed.
+2. **Credit.** Open: I haven't been able to find out who made the backdrop. If I do, they'll be credited at the top of this file and on the page. The show stays unnamed.
 3. ~~The asset route.~~ Resolved for the study: see [Who made what](#who-made-what). The original scenes follow the hybrid plan in [ASSETS.md](ASSETS.md).
 
 ## Building the study
 
 ### Who made what
 
-For this study I asked Claude (Anthropic's AI coding assistant) to build everything, art included, so I could see the whole pipeline working before making my own assets. That means:
+I designed the study: the look-dev analysis above, what to recreate and how, the layering, the palette and every visual decision, judged render by render against the reference. The code was written with help from Claude, Anthropic's AI coding assistant. I made the study fully procedural so I could see the whole pipeline working before making my own assets. That means:
 
-- **All of the study's art is procedural.** Shapes are signed-distance functions with noise on their edges, and surfaces come from material functions (fibers, clumped foliage, paper grain, clay, beads) in [js/materials.js](../js/materials.js). There are no photographs, no hand-drawn images and no AI-generated images. Claude wrote the code that draws the art, and I directed it by comparing renders against the reference.
+- **All of the study's art is procedural.** Shapes are signed-distance functions with noise on their edges, and surfaces come from material functions (fibers, clumped foliage, paper grain, clay, beads) in [js/materials.js](../js/materials.js). There are no photographs, no hand-drawn images and no images from image-generation models.
 - **The original scenes will use my own assets**, photographed and drawn as described in [ASSETS.md](ASSETS.md). The README will say layer by layer what's procedural, photographed or drawn.
 
 ### What the renderer does

@@ -19,14 +19,15 @@
 
   // ---------- look presets ----------
   const BASE_POST = {
-    depth: { radius: 1.2 },
+    depth: { radius: 1.2, near: 0 },
     bloom: { glow: 0.7, threshold: 0.5, mist: 0.3, radius: 0.85 },
     halation: { amount: 0.4, threshold: 0.55, color: "#FF7340" },
     ca: { amount: 0.0004 },
     vignette: { amount: 0.3, color: "#E0A890" },
     grain: { amount: 0.028, perFrame: false },
+    sway: { amount: 0, ghost: 0, edges: 0 },
   };
-  const ALL_ON = { depth: true, bloom: true, halation: true, grade: true, ca: true, vignette: true, grain: true };
+  const ALL_ON = { depth: true, bloom: true, halation: true, grade: true, ca: true, vignette: true, grain: true, sway: true };
 
   const PRESETS = {
     warm: {
@@ -129,10 +130,15 @@
     return normalize(LB.scenes.lilac()).doc;
   }
 
+  // Reef Rave, an octopus party in an underwater cave.
+  function fromReef() {
+    return normalize(LB.scenes.reef()).doc;
+  }
+
   function fromStudy() {
     const g = clone(LB.scenes.garden);
     g.title = "Garden study";
-    g.note = "The study of the reference backdrop, by Tamara. Procedural art, code by Claude.";
+    g.note = "The study of the reference backdrop. Procedural: every piece is drawn by code.";
     g.fps = 12;
     g.boil = 1;
     // The measured grade carries its own post settings; keep the default (warm) post on the scene.
@@ -323,8 +329,11 @@
     // Records whatever previews happened since the last record.
     commit(label) { history.commit(label); },
 
-    load(doc, label) {
+    // id is the saved scene this is, if it is one. Anything not yet stored of the old scene goes first.
+    load(doc, label, id = null) {
+      this.emit("leaving");
       this.doc = doc;
+      this.sceneId = id;
       history.reset();
       this.sel = { layer: null, item: null, group: null, multi: null };
       this.emit("load", { label });
@@ -374,64 +383,10 @@
   };
   ED.history = history;
 
-  // ---------- autosave (IndexedDB; a scene with photos can be several MB) ----------
-  const DB = "elaborate-backgrounds", STORE = "scenes", KEY = "current";
-  // Version 2 adds "pieces" (My pieces) and "packs" (installed pack files).
-  function idb() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB, 2);
-      req.onupgradeneeded = () => {
-        for (const name of [STORE, "pieces", "packs"]) if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  // "key" is "current" for the autosave, or "previous" for the scene kept aside when a sample is opened from the landing page.
-  async function saveLocal(doc, key = KEY) {
-    const db = await idb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put(serialize(doc), key);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-  }
-  async function loadLocal(key = KEY) {
-    const db = await idb();
-    const text = await new Promise((resolve, reject) => {
-      const req = db.transaction(STORE).objectStore(STORE).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    return text ? normalize(JSON.parse(text)) : null;
-  }
-
-  // Simple key/value access to the other stores.
-  async function dbAll(store) {
-    const db = await idb();
-    const out = await new Promise((resolve, reject) => {
-      const tx = db.transaction(store);
-      const req = tx.objectStore(store).getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    return out;
-  }
-  async function dbPut(store, key, value) {
-    const db = await idb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(store, "readwrite");
-      if (value === undefined) tx.objectStore(store).delete(key);
-      else tx.objectStore(store).put(value, key);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-  }
+  // ---------- stores ----------
+  // Saving lives in js/saves.js, which the home page shares.
+  const dbAll = (store) => LB.SAVES.all(store);
+  const dbPut = (store, key, value) => LB.SAVES.put(store, key, value);
 
   // ---------- pieces and packs ----------
   // A piece is { id, name, kind: "item" | "layer", data, images, thumb, credit }. A pack file is
@@ -521,6 +476,6 @@
     return moved;
   }
 
-  LB.DOC = { mergeProblem, mergeLayers, groupId, cycleText, FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, fromLilac, normalize, serialize, saveLocal, loadLocal,
+  LB.DOC = { mergeProblem, mergeLayers, groupId, cycleText, FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, fromLilac, fromReef, normalize, serialize,
     dbAll, dbPut, PACK_FORMAT, normalizePiece, normalizePack };
 })();

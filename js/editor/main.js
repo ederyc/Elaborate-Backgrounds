@@ -250,26 +250,123 @@
     });
   }
 
-  // ---------- autosave and the save chip ----------
+  // ---------- saving and the save chip ----------
+  // Each scene worked on here is its own entry in the browser's saved scenes (js/saves.js). A sample or
+  // a blank scene only becomes one at its first edit, so looking around leaves nothing behind.
   function setSave(state, text) {
     const chip = $("#save-state");
     chip.dataset.state = state;
     chip.querySelector(".save-text").textContent = text;
   }
-  let saveTimer = 0;
-  ED.on("history", () => {
+  let saveTimer = 0, unsaved = false, picture = null, pictureTries = 0;
+  let writes = Promise.resolve();
+  const showSceneInUrl = () => history.replaceState(null, "", ED.sceneId ? `${location.pathname}?scene=${encodeURIComponent(ED.sceneId)}` : location.pathname);
+
+  // A small still for the scene's card, or null if the renderer is busy with something else.
+  function takePicture() {
+    if ($("#viewport").classList.contains("is-loading")) return null;
+    const a = ED.doc.aspect || LB.DOC.A, h = 270, w = Math.min(640, Math.round(h * a));
+    let img = null;
+    try { img = LB.CANVAS.still(w - (w % 2), h); } catch { return null; }
+    if (!img) return null;
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    c.getContext("2d").putImageData(img, 0, 0);
+    return c.toDataURL("image/jpeg", 0.8);
+  }
+  // The picture can't be taken while a scene is still baking, so it tries again until it can.
+  function refreshPicture() {
+    const id = ED.sceneId;
+    if (!id) return;
+    const url = takePicture();
+    if (url) {
+      picture = url;
+      pictureTries = 0;
+      writes = writes.then(() => LB.SAVES.patch(id, { thumb: url })).catch(() => {});
+    } else if (pictureTries++ < 10) setTimeout(refreshPicture, 500);
+  }
+  // Takes everything it needs from the scene right away, so the scene can change while the write runs.
+  ED.saveNow = function saveNow() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
-      try {
-        await LB.DOC.saveLocal(ED.doc);
-        setSave("saved", "Saved in this browser");
-      } catch (err) {
-        setSave("error", "Not saved: storage is blocked");
-        ED.emit("status", { msg: "This browser blocked storage, so the scene isn't saved here. Use File, Save the scene file.", tone: "error" });
-      }
-    }, 1000);
-  });
-  ED.on("saved-state", () => setSave("dirty", "Saving…"));
+    unsaved = false;
+    const isNew = !ED.sceneId;
+    if (isNew) ED.sceneId = `scene-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    const id = ED.sceneId, doc = ED.doc;
+    const text = LB.DOC.serialize(doc);
+    picture = takePicture() || picture;
+    const record = { id, title: doc.title, updated: Date.now(), aspect: doc.aspect, layers: doc.layers.length, thumb: picture };
+    const write = writes.then(() => LB.SAVES.write(record, text));
+    writes = write.catch(() => {});
+    return write.then(() => {
+      if (id !== ED.sceneId) return;
+      if (isNew) showSceneInUrl();
+      if (!unsaved) setSave("saved", "Saved in this browser");
+      if (!picture) refreshPicture();
+    }, () => {
+      setSave("error", "Not saved: storage is blocked or full");
+      ED.emit("status", { msg: "This browser wouldn't store the scene, so it isn't saved here. Use File, Save the scene file.", tone: "error" });
+    });
+  };
+  ED.saveSoon = function saveSoon() {
+    unsaved = true;
+    setSave("dirty", "Saving…");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(ED.saveNow, 1000);
+  };
+  // Only real changes save: loading a scene resets the undo history without emitting this.
+  ED.on("saved-state", ED.saveSoon);
+  // The last second of work goes to storage before the scene is replaced or the page goes away.
+  const flush = () => { if (unsaved) ED.saveNow(); };
+  ED.on("leaving", flush);
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
+
+  // ---------- recent scenes ----------
+  async function openSaved(id) {
+    try {
+      const text = await LB.SAVES.read(id);
+      if (typeof text !== "string") throw new Error("gone");
+      const { doc, warnings } = LB.DOC.normalize(JSON.parse(text));
+      ED.load(doc, "Open", id);
+      ED.emit("status", { msg: warnings.length ? `Opened ${doc.title}. ${warnings.join(" ")}` : `Opened ${doc.title}.`, tone: warnings.length ? "warn" : "ok" });
+      setTimeout(refreshPicture, 800);
+    } catch {
+      ED.emit("status", { msg: "That scene couldn't be read back from this browser.", tone: "error" });
+    }
+  }
+  async function renderRecent() {
+    const box = $("#recent-list");
+    let records = [];
+    try { records = await LB.SAVES.list(); } catch { box.replaceChildren(h("li", { class: "recents-empty", text: "This browser won't let the editor read its saved scenes." })); return; }
+    if (!records.length) { box.replaceChildren(h("li", { class: "recents-empty", text: "Nothing saved yet. A scene appears here once you change something in it." })); return; }
+    box.replaceChildren(...records.map((r) => {
+      const here = r.id === ED.sceneId;
+      const pic = r.thumb ? h("img", { src: r.thumb, alt: "" }) : h("span", { class: "recent-ph" });
+      const facts = `Edited ${LB.SAVES.ago(r.updated)} · ${r.layers} ${r.layers === 1 ? "layer" : "layers"}`;
+      return h("li", { class: "recent" },
+        h("button", { type: "button", class: "tcard", onclick: () => { $("#dlg-recent").close(); if (!here) openSaved(r.id); } },
+          pic, h("span", { class: "tcard-name", text: r.title }), h("span", { class: "tcard-note", text: facts }),
+          here ? h("span", { class: "recent-now", text: "Open now" }) : null),
+        here ? null : h("button", { type: "button", class: "ibtn recent-remove", "aria-label": `Remove ${r.title}`, "data-tip": "Remove", html: ICONS.close, onclick: () => removeRecent(r) }));
+    }));
+  }
+  async function removeRecent(r) {
+    try {
+      const kept = await LB.SAVES.remove(r.id);
+      renderRecent();
+      ED.emit("status", { msg: `Removed ${r.title}.`, action: { label: "Undo", run: async () => { await LB.SAVES.write(kept.record, kept.text); if ($("#dlg-recent").open) renderRecent(); } } });
+    } catch {
+      ED.emit("status", { msg: "That scene couldn't be removed.", tone: "error" });
+    }
+  }
+  async function openRecent() {
+    flush();
+    await writes;
+    await renderRecent();
+    const dlg = $("#dlg-recent");
+    if (!dlg.open) dlg.showModal();
+  }
 
   // ---------- undo ----------
   function updateHistory() {
@@ -312,7 +409,7 @@
     file: () => [
       { label: "New scene…", icon: "file", run: () => LB.EXPORT.openNew() },
       { label: "Open a scene file…", icon: "open", keys: "Ctrl O", run: () => $("#file-open").click() },
-      ED.hasPrevious ? { label: "Reopen my last scene", icon: "reset", run: reopenPrevious } : null,
+      { label: "Recent scenes…", icon: "reset", run: openRecent },
       { label: "Save the scene file", icon: "save", keys: "Ctrl S", run: () => LB.EXPORT.saveFile() },
       "-",
       { label: "Export…", icon: "export", keys: "Ctrl E", run: () => LB.EXPORT.openExport() },
@@ -365,22 +462,10 @@
       { label: "Keyboard shortcuts", icon: "keyboard", keys: "?", run: openKeys },
       { label: "Take the tour", icon: "help", run: () => tour(0) },
       "-",
-      { label: "Back to the landing page", icon: "sky", run: () => (location.href = "index.html") },
+      { label: "Back to the landing page", icon: "sky", run: async () => { flush(); await writes; location.href = "index.html"; } },
       { label: "Open the garden study", icon: "flower", run: () => (location.href = "study.html") },
     ],
   };
-  // The scene that was kept aside when a sample was opened from the landing page.
-  async function reopenPrevious() {
-    try {
-      const prev = await LB.DOC.loadLocal("previous");
-      if (!prev) return;
-      ED.load(prev.doc, "Open");
-      ED.history.commit("Reopen my last scene");
-      ED.emit("status", { msg: `Reopened ${prev.doc.title}.`, tone: "ok" });
-    } catch {
-      ED.emit("status", { msg: "That scene couldn't be read back from this browser.", tone: "error" });
-    }
-  }
   let openMenuKey = null;
   function openMenuFor(btn) {
     const key = btn.dataset.menu;
@@ -488,7 +573,7 @@
       h("h3", { id: "tour-h", text: title }),
       h("p", { id: "tour-p", text }),
       h("div", { class: "tour-foot" },
-        h("span", { class: "tour-dots", "aria-label": `Step ${i + 1} of ${STEPS.length}` }, ...STEPS.map((_, k) => h("i", { class: k === i ? "is-on" : null }))),
+        h("span", { class: "tour-dots", role: "img", "aria-label": `Step ${i + 1} of ${STEPS.length}` }, ...STEPS.map((_, k) => h("i", { class: k === i ? "is-on" : null }))),
         h("button", { type: "button", class: "btn btn-ghost btn-sm", text: "Skip", onclick: () => tour(-1) }), next));
     // Beside the target where there's room, otherwise below or above it.
     const cw = 290, ch = card.offsetHeight || 170;
@@ -583,30 +668,35 @@
     LB.PANELS.init();
     LB.EXPORT.init();
     initMenubar();
-    let first = null, warnings = [];
-    try {
-      const saved = await LB.DOC.loadLocal();
-      if (saved) { first = saved.doc; warnings = saved.warnings; }
-    } catch (err) {
-      console.warn("No saved scene", err);
-    }
-    let restored = !!first;
-    // editor.html?open=lilac (or beach, study) opens a sample, as the landing page's links do. A scene
-    // already saved here is kept aside first, so the sample's autosave can't overwrite it.
-    const SAMPLES = { lilac: ["Lilac Falls", () => LB.DOC.fromLilac()], beach: ["Beach day", () => LB.DOC.fromBeach()], study: ["the garden study", () => LB.DOC.fromStudy()] };
-    const want = SAMPLES[new URLSearchParams(location.search).get("open")];
-    let openedSample = null;
+    // editor.html?open=lilac (or reef, beach, study) opens a sample, ?scene=id a saved scene, and the plain
+    // address the scene worked on last.
+    const params = new URLSearchParams(location.search);
+    const SAMPLES = { lilac: ["Lilac Falls", () => LB.DOC.fromLilac()], reef: ["Reef Rave", () => LB.DOC.fromReef()], beach: ["Beach day", () => LB.DOC.fromBeach()], study: ["the garden study", () => LB.DOC.fromStudy()] };
+    const want = SAMPLES[params.get("open")];
+    let first = null, firstId = null, warnings = [], openedSample = null, trouble = "";
     if (want) {
-      if (first) { try { await LB.DOC.saveLocal(first, "previous"); ED.hasPrevious = true; } catch {} }
       first = want[1]();
-      warnings = [];
-      restored = false;
       openedSample = want[0];
-      // A reload shouldn't open the sample again over the work done since.
-      history.replaceState(null, "", location.pathname);
     } else {
-      try { ED.hasPrevious = !!(await LB.DOC.loadLocal("previous")); } catch {}
+      try {
+        let id = params.get("scene"), text = id ? await LB.SAVES.read(id) : null;
+        if (id && typeof text !== "string") { trouble = "That scene isn't saved in this browser any more, so the editor opened your latest one."; id = null; }
+        if (!id) {
+          const [latest] = await LB.SAVES.list();
+          if (latest) { id = latest.id; text = await LB.SAVES.read(id); }
+        }
+        if (typeof text === "string") {
+          const saved = LB.DOC.normalize(JSON.parse(text));
+          first = saved.doc;
+          firstId = id;
+          warnings = saved.warnings;
+        }
+      } catch (err) {
+        console.warn("No saved scene", err);
+        trouble = "Your saved scene couldn't be read back, so the editor opened a sample. It's still listed in File, Recent scenes.";
+      }
     }
+    const restored = !!first && !openedSample;
     if (!first) first = LB.DOC.fromBeach();
     clock = LB.createClock(first.fps || 12);
     ED.renderer = renderer;
@@ -617,7 +707,13 @@
     ED.on("doc", scheduleSync);
     ED.on("doc", (e) => { if (!e || !e.preview) updateFps(); });
     ED.on("history", updateHistory);
-    ED.on("load", () => { $("#doc-title").value = ED.doc.title; $("#viewport").classList.add("is-loading"); tickKey = ""; });
+    ED.on("load", () => {
+      $("#doc-title").value = ED.doc.title;
+      $("#viewport").classList.add("is-loading");
+      tickKey = "";
+      picture = null;
+      setSave(ED.sceneId ? "saved" : "dirty", ED.sceneId ? "Saved in this browser" : "Not saved yet");
+    });
 
     $("#doc-title").addEventListener("input", (e) => ED.preview((d) => (d.title = e.target.value.slice(0, 80) || "Untitled scene")));
     $("#doc-title").addEventListener("change", () => ED.commit("Rename scene"));
@@ -647,13 +743,16 @@
     document.addEventListener("visibilitychange", schedule);
     reduceMotion.addEventListener("change", (e) => { if (e.matches) setPlaying(false); });
 
-    ED.load(first, "Open");
+    ED.load(first, "Open", firstId);
+    // From here on, the address follows the open scene, so a reload comes back to it.
+    ED.on("load", showSceneInUrl);
+    if (firstId) showSceneInUrl();
     LB.CANVAS.fit();
     updateFps();
-    if (warnings.length) ED.emit("status", { msg: warnings.join(" "), tone: "warn" });
-    else if (openedSample) ED.emit("status", { msg: `Opened ${openedSample}. Click any piece to see how it's made.${ED.hasPrevious ? " The scene you had open is kept: File, Reopen my last scene." : ""}`, timeout: 8000 });
+    if (trouble) ED.emit("status", { msg: trouble, tone: "warn" });
+    else if (warnings.length) ED.emit("status", { msg: warnings.join(" "), tone: "warn" });
+    else if (openedSample) ED.emit("status", { msg: `Opened ${openedSample}. Click any piece to see how it's made.`, timeout: 8000 });
     else ED.emit("status", { msg: restored ? "Opened your last scene from this browser." : "This is Beach day, the sample scene. Click any piece to see how it's made, or start fresh with File, New scene." });
-    setSave(restored ? "saved" : "dirty", restored ? "Saved in this browser" : "Not saved yet");
 
     await renderer.sync(sceneFor(ED.doc));
     $("#viewport").classList.remove("is-loading");
@@ -661,6 +760,7 @@
     LB.CANVAS.applyView();
     redraw();
     ED.emit("synced");
+    if (firstId) refreshPicture();
     setPlaying(!reduceMotion.matches);
     document.documentElement.dataset.ready = "true";
     LB.STORE.makeThumbs();

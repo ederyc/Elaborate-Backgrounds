@@ -2,7 +2,7 @@
   "Beach day": the editor's first sample scene, built only from the
   editor's own pieces (shapes, materials, pose cycles and motions), so
   every part of it can be opened, changed or copied in the editor.
-  Procedural, written by Claude. No photos and no AI-generated images.
+  Designed by Eder Yepez Cuevas. Procedural: no photos and no image-generation models.
 
   The layout is a simple one-point perspective along the coast. The
   viewer stands on the sand looking up the beach: the water comes in on
@@ -750,7 +750,7 @@
     return {
       format: "elaborate-backgrounds/scene", version: 1,
       title: "Beach day",
-      note: "Sample scene built from the editor's own pieces. Procedural, written by Claude.",
+      note: "Sample scene by Eder Yepez Cuevas, built from the editor's own pieces. Procedural: every piece is drawn by code.",
       aspect: A, focus: [1.12, 0.5],
       background: "#F7E3C4", horizon: "#F6E2CC",
       camera: { drift: [0.006, 0.002] },

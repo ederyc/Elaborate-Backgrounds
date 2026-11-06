@@ -1,8 +1,8 @@
 /*
   Lilac Falls: the bespoke art of the project's own scene (the landing page).
 
-  The garden study recreated the feel of a stop-motion backdrop by Tamara.
-  This scene keeps that palette and mood but is laid out from scratch: a
+  The garden study recreated the feel of a stop-motion backdrop seen on a
+  podcast set. This scene keeps that palette and mood but is laid out from scratch: a
   stepped clay cliff with a two-tier waterfall on the left, a pool that
   runs out into a stream toward the viewer, a blossom tree on the right.
 

@@ -18,6 +18,10 @@
   baked frames). Boil wobbles each layer's texture lookup with a smooth
   noise that changes seed on the beat.
 
+  Focus: "far" layers are drawn first and blurred together; "near" layers
+  (things right by the lens) are drawn last, on their own, and blurred much
+  harder, so whatever sits between them is what's in focus.
+
   Work is only done when something changes: the scene and the bloom chain
   re-render on a new beat or a new setting, and the final pass re-runs every
   display frame only when grain is set to change per frame.
@@ -96,7 +100,7 @@ void main() {
 }`;
 
   // Layer fields that only change how a baked layer is placed and blended, never what's in it.
-  const COMPOSITE_KEYS = new Set(["baseRect", "order", "sig", "id", "name", "depth", "boil", "haze", "far", "offset", "opacity", "hidden", "locked", "pivot", "anim", "index", "note", "groups", "group"]);
+  const COMPOSITE_KEYS = new Set(["baseRect", "order", "sig", "id", "name", "depth", "boil", "haze", "far", "near", "offset", "opacity", "hidden", "locked", "pivot", "anim", "index", "note", "groups", "group"]);
   // Scene bounds a layer's texture may cover (the frame plus room for parallax and dragging past the edge).
   const limitOf = (scene) => [-0.35, -0.35, (scene.aspect || 16 / 9) + 0.35, 1.35];
 
@@ -473,6 +477,8 @@ void main() {
       rt.scene = target(gl, W, H);
       rt.halfA = target(gl, W / 2, H / 2);
       rt.halfB = target(gl, W / 2, H / 2);
+      rt.quarterA = target(gl, W / 4, H / 4);
+      rt.quarterB = target(gl, W / 4, H / 4);
       rt.down = [];
       rt.up = [];
       for (let i = 0; i < bloomLevels; i++) {
@@ -659,7 +665,49 @@ void main() {
       bindTarget(gl, rt.scene);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-      drawLayers(layers.filter((L) => !L.far), t, seed, cam);
+      const near = post.on.depth && post.depth.near > 0;
+      drawLayers(layers.filter((L) => !L.far && !(near && L.near)), t, seed, cam);
+      gl.disable(gl.BLEND);
+      if (near && layers.some((L) => L.near)) renderNear(t, seed, cam);
+    }
+
+    // The layers right by the lens: drawn on their own at half size, then blurred at quarter size,
+    // in as many light passes as the blur needs (one wide pass would leave rings), and laid on top.
+    function renderNear(t, seed, cam) {
+      bindTarget(gl, rt.halfA);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      drawLayers(layers.filter((L) => L.near), t, seed, cam);
+      gl.disable(gl.BLEND);
+      bindTarget(gl, rt.quarterA);
+      let u = fullscreen(progs.copy);
+      bindTex(gl, 0, rt.halfA.tex);
+      gl.uniform1i(u.uTex, 0);
+      drawQuad();
+      // The blur is measured in pixels on a 1080-pixel-tall screen; each pass spreads about 1.63 taps.
+      const sigma = (post.depth.near * H) / 1080 / 4;
+      const passes = Math.min(32, Math.max(1, Math.ceil((sigma / 1.63) ** 2)));
+      const r = sigma / (1.63 * Math.sqrt(passes));
+      u = fullscreen(progs.blur);
+      gl.uniform1i(u.uTex, 0);
+      for (let i = 0; i < passes; i++) {
+        bindTarget(gl, rt.quarterB);
+        bindTex(gl, 0, rt.quarterA.tex);
+        gl.uniform2f(u.uDir, r / rt.quarterA.w, 0);
+        drawQuad();
+        bindTarget(gl, rt.quarterA);
+        bindTex(gl, 0, rt.quarterB.tex);
+        gl.uniform2f(u.uDir, 0, r / rt.quarterA.h);
+        drawQuad();
+      }
+      bindTarget(gl, rt.scene);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      u = fullscreen(progs.copy);
+      bindTex(gl, 0, rt.quarterA.tex);
+      drawQuad();
       gl.disable(gl.BLEND);
     }
 
@@ -729,6 +777,15 @@ void main() {
       gl.uniform1f(u.uGrain, post.grain.amount);
       gl.uniform1f(u.uGrainSeed, post.grain.perFrame ? frameCount % 997 : clock.beat);
       gl.uniform2f(u.uRes, W, H);
+      // A tipsy camera: the frame leans, breathes and doubles, stepping on the beat like the rest.
+      // Still while paused, so the editor's clicks land where they look.
+      const s = post.on.sway && post.sway && post.motion ? post.sway : null;
+      const f = (clock.beatTime || 0) / LB.LOOP;
+      const lean = s ? s.amount * 0.03 * (0.7 * Math.sin(TAU * f) + 0.3 * Math.sin(TAU * 3 * f + 1.3)) : 0;
+      const zoom = s ? 1 + s.amount * 0.07 + s.amount * 0.012 * Math.sin(TAU * 2 * f + 0.4) : 1;
+      gl.uniform4f(u.uSway, lean, zoom, s ? s.ghost * 0.012 * Math.sin(TAU * 4 * f) : 0, s ? s.ghost * 0.004 * Math.cos(TAU * 3 * f) : 0);
+      gl.uniform1f(u.uGhost, s ? Math.min(0.5, s.ghost * 0.45) : 0);
+      gl.uniform1f(u.uEdge, s && on.bloom ? s.edges : 0);
       drawQuad();
     }
 

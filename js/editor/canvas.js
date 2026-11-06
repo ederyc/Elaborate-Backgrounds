@@ -900,6 +900,26 @@
     requestAnimationFrame(fit);
   }
 
+  // A still of the scene at w x h as it looks now, for its card in the saved scenes.
+  function still(w, h) {
+    const r = ED.renderer;
+    if (!r || r.busy || ED.recording) return null;
+    const prev = r.size;
+    try {
+      r.setView(null);
+      r.setPost({ ...ED.postFor(ED.doc), onion: null });
+      r.resize(w, h);
+      r.invalidate();
+      r.draw(ED.clock);
+      return r.readPixels();
+    } finally {
+      r.setPost(ED.postFor(ED.doc));
+      r.resize(prev[0], prev[1]);
+      applyView();
+      ED.redraw();
+    }
+  }
+
   // A still of the scene at w x h with each of a few looks, for the Look tab's preset cards.
   function snapshot(w, h, looks) {
     const r = ED.renderer;
@@ -1087,7 +1107,7 @@
     ED.on("load", () => { view.fit = true; requestAnimationFrame(fit); });
   }
 
-  LB.CANVAS = {
+  LB.CANVAS = { still,
     init, fit, applyView, setTool, toScene, toScreen, toClient, hitTest, pieceMenu, stageMenu, snapshot, setPresenting, setGuides, setSnap,
     zoomIn: () => zoomBy(1.25), zoomOut: () => zoomBy(0.8), zoomFit, zoomTo, zoomToSelection, zoomMenu,
     get zoom() { return { ...view, pct: Math.round((view.z / ACTUAL) * 100) }; },

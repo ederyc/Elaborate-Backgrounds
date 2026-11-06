@@ -702,6 +702,15 @@ body.is-scrubbing, body.is-scrubbing * { cursor: ew-resize !important; user-sele
 .tcard:hover img { transform: scale(1.03); }
 .tcard-name { margin: 4px 4px 0; font: 650 15px var(--serif); font-variation-settings: "SOFT" 100, "WONK" 1; }
 .tcard-note { margin: 0 4px; color: var(--ink-3); font-size: 12.5px; }
+.recents { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 0; padding: 0 22px 22px; }
+.recent { position: relative; display: grid; }
+.recent .tcard { width: 100%; height: 100%; align-content: start; }
+.recent .tcard img, .recent-ph { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; border-radius: 12px; background: var(--well); }
+.recent-now { display: block; margin: 0 4px; color: var(--teal-deep); font-size: 12.5px; font-weight: 600; }
+[data-theme="studio"] .recent-now { color: var(--teal); }
+.recent-remove { position: absolute; top: 14px; right: 14px; width: 28px; height: 28px; padding: 6px; background: var(--tray-hi); box-shadow: 0 1px 4px var(--sh); }
+.recent-remove svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.recents-empty { grid-column: 1 / -1; color: var(--ink-3); font-size: 13px; }
 .shapes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 0 22px 22px; }
 .shape-card { display: grid; justify-items: center; align-content: end; gap: 3px; height: 116px; padding: 10px 6px; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--raise); color: var(--ink); font-size: 12.5px; font-weight: 600; transition: transform 0.25s var(--spring), border-color 0.2s; }
 .shape-card small { color: var(--ink-3); font-weight: 400; font-family: var(--mono); font-size: 11px; }

@@ -680,7 +680,7 @@
       else poses = [[0, 0], [0.28, 0.05], [0, 0], [-0.28, -0.05]].map(([yaw, r]) => ({ ...(yaw ? { yaw } : {}), ...(r ? { r } : {}) }));
       ED.change((doc) => {
         if (L.paint.length > 1) {
-          const own = { id: D().uid("layer", ED.layerIds()), name: `${D().itemName(item, doc)} (animated)`, depth: L.depth, boil: L.boil, haze: L.haze || 0, far: L.far, seed: Math.floor(Math.random() * 1000), paint: [] };
+          const own = { id: D().uid("layer", ED.layerIds()), name: `${D().itemName(item, doc)} (animated)`, depth: L.depth, boil: L.boil, haze: L.haze || 0, far: L.far, near: L.near, seed: Math.floor(Math.random() * 1000), paint: [] };
           L.paint.splice(L.paint.indexOf(item), 1);
           doc.layers.splice(doc.layers.indexOf(L) + 1, 0, own);
           own.paint.push(item);
@@ -788,7 +788,7 @@
       const L = ED.selLayer(), members = ED.selMembers(), g = ED.selGroup();
       if (!L || !members.length) return;
       const name = g ? g.name : members.length > 1 ? `${L.name} pieces` : D().itemName(members[0], ED.doc);
-      const nl = { id: D().uid("layer", ED.layerIds()), name, depth: L.depth, boil: L.boil, haze: L.haze || 0, far: L.far, seed: newSeed(), paint: [],
+      const nl = { id: D().uid("layer", ED.layerIds()), name, depth: L.depth, boil: L.boil, haze: L.haze || 0, far: L.far, near: L.near, seed: newSeed(), paint: [],
         ...(L.offset ? { offset: L.offset.slice() } : {}), ...(L.cycle && members.some((it) => it.poses) ? { cycle: { ...L.cycle } } : {}) };
       ED.change((doc) => {
         L.paint = L.paint.filter((it) => !members.includes(it));

@@ -95,6 +95,15 @@ h2 { margin: 0; font: 650 clamp(26px, 3vw, 36px)/1.15 var(--serif); font-variati
 .scene-card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 13px; display: block; }
 .scene-name { margin: 6px 6px 0; font: 650 18px var(--serif); font-variation-settings: "SOFT" 100, "WONK" 1; }
 .scene-note { margin: 0 6px; color: var(--ink-3); font-size: 14px; }
+.recent-card { position: relative; }
+.recent-card img, .recent-ph { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; border-radius: 13px; background: var(--plum); }
+.recent-card .scene-name, .recent-card .scene-note { padding-right: 76px; overflow-wrap: anywhere; }
+.recent-remove { position: absolute; right: 16px; bottom: 16px; min-height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--raise); color: var(--ink-2); font: 500 13px/1 var(--sans); cursor: pointer; transition: transform 0.2s var(--spring), color 0.15s; }
+.recent-remove:hover { color: var(--ink); transform: translateY(-1px); }
+.recent-notice { margin: 14px 0 0; color: var(--ink-2); font-size: 14px; }
+.recent-notice:empty { display: none; }
+.recent-undo { padding: 0 2px; border: 0; background: none; color: var(--sun); font: 600 14px/1.4 var(--sans); text-decoration: underline; cursor: pointer; }
+#recent-more { margin-top: 16px; }
 .foot { max-width: 1160px; margin: 0 auto; padding: 56px clamp(16px, 5vw, 64px) 48px; color: var(--ink-3); font-size: 14px; }
 .foot p { max-width: 62ch; margin: 0; border-top: 1px solid var(--line); padding-top: 20px; }
 

@@ -55,6 +55,8 @@
   function saveFile() {
     const text = LB.DOC.serialize(ED.doc);
     download(new Blob([text], { type: "application/json" }), `${slug(ED.doc.title)}.json`);
+    // Saving on purpose counts, even for a scene that hasn't been edited.
+    if (ED.saveNow) ED.saveNow();
     const kb = Math.round(text.length / 1024);
     say(`Saved ${slug(ED.doc.title)}.json (${kb >= 1024 ? (kb / 1024).toFixed(1) + " MB" : kb + " KB"}).`, "ok");
   }
@@ -66,6 +68,8 @@
       try { raw = JSON.parse(text); } catch { throw new Error(`${file.name} isn't valid JSON.`); }
       const { doc, warnings } = LB.DOC.normalize(raw);
       ED.load(doc, "Open");
+      // A file somebody chose to open is their work, so it joins the recent scenes straight away.
+      if (ED.saveSoon) ED.saveSoon();
       say(warnings.length ? `Opened ${file.name}. ${warnings.join(" ")}` : `Opened ${file.name}.`, warnings.length ? "warn" : undefined);
     } catch (err) {
       say(`Couldn't open that file: ${err.message}`, "error");
@@ -178,7 +182,7 @@
   // ---------- live wallpaper ----------
   // The same scripts player.html loads, in order. They're read from this site and written inline.
   const PLAYER_SCRIPTS = ["js/gl.js", "js/clock.js", "js/materials.js", "js/elements.js", "js/shapes.js", "js/clay.js", "js/items.js", "js/post.js", "js/renderer.js",
-    "js/scenes/garden-art.js", "js/scenes/lilac-art.js", "js/editor/doc.js", "js/player.js"];
+    "js/scenes/garden-art.js", "js/scenes/lilac-art.js", "js/scenes/reef-art.js", "js/editor/doc.js", "js/player.js"];
   const esc = (t) => t.replace(/<\/(script)/gi, "<\\/$1");
   async function exportLiveWallpaper() {
     try {
@@ -336,11 +340,12 @@ ${sources.map(([src, text]) => `<script data-src="${src}">\n${esc(text)}\n</scri
       const t = e.target.closest("[data-template]");
       if (!t) return;
       const kind = t.dataset.template;
-      const doc = kind === "study" ? LB.DOC.fromStudy() : kind === "beach" ? LB.DOC.fromBeach() : kind === "lilac" ? LB.DOC.fromLilac() : LB.DOC.blankDoc(+t.dataset.aspect || LB.DOC.A);
+      const doc = kind === "study" ? LB.DOC.fromStudy() : kind === "beach" ? LB.DOC.fromBeach() : kind === "lilac" ? LB.DOC.fromLilac() : kind === "reef" ? LB.DOC.fromReef() : LB.DOC.blankDoc(+t.dataset.aspect || LB.DOC.A);
       dlgNew.close();
       ED.load(doc, "New scene");
       say({ study: "Opened the garden study. Every piece of it can be moved, changed or deleted.",
         beach: "Opened the Beach day sample. Every piece is an editor shape; click one to see how it's made.",
+        reef: "Opened Reef Rave. Each dancer in the crowd is its own group: click one to move it, double-click to reach a tentacle.",
         lilac: "Opened Lilac Falls. The water, cliff, sky and hills are bespoke art; everything else is the editor's own pieces.",
         blank: "New scene. Draw with the shape tools or add pieces from the store." }[kind]);
     });

@@ -16,6 +16,7 @@ The editor borrows from the scenes it makes instead of from Photoshop or Illustr
 | --- | --- |
 | Top bar | Scene name, the save chip, File / Edit / View / Help menus, undo and redo, the theme switch, shortcuts, Present and Export |
 | Rail (left edge) | The + button that opens the store, then the tools: select, pan, five shapes, the pen |
+| Recent scenes | A dialog from the File menu: a card for each scene saved in this browser, newest first, with a picture and when it was last edited. The open one says *Open now*; the others can be removed, with Undo in the toast |
 | Store drawer | Slides out over the layers from the + button: search, group chips, piece cards |
 | Layers | The depth diagram, then the rows, front at the top, with buttons for new, duplicate, forward, backward and delete |
 | Stage | The canvas, the zoom bar and the toasts |
@@ -96,7 +97,7 @@ The function is `depthColor()` in ui.js.
 - Card titles are headings, so a screen reader can jump card to card.
 - The canvas takes the keyboard when focused, and every edit the mouse can make has a field in the inspector.
 - Focus is a sun-colored ring.
-- Text meets WCAG AA contrast in both themes; axe-core found no violations in either.
+- Text meets WCAG AA contrast in both themes. axe-core finds one issue in either theme: the buttons that expand a layer's pieces are 18 px, and WCAG 2.2 asks for 24 px ([docs/TESTING.md](TESTING.md)).
 
 ## Known limits
 

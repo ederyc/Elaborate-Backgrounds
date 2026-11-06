@@ -59,6 +59,7 @@ Layers are listed back to front. Three kinds:
 | --- | --- |
 | `depth` | 0 is the sky, 1 touches the lens. Drives parallax. |
 | `far` | Drawn before the depth-softness blur, so it can be blurred |
+| `near` | Right by the lens: drawn on top of everything, on its own, and blurred by `post.depth.near` (pixels at 1080p) |
 | `haze` | 0 to 0.5: how far toward the horizon color |
 | `boil` | Per-beat wobble in pixels at 1080p |
 | `seed` | Pins the layer's noise, so reordering layers never changes how one looks |
@@ -183,4 +184,4 @@ A pack is a file of pieces that the store can install (**Install a pack** under 
 
 ## Look
 
-`post` holds each pass's settings and `post.on` its switches. `grades` holds named grades, and `grade` names the one in use. The fields match the Look panel, and [js/post.js](../js/post.js) documents each pass.
+`post` holds each pass's settings and `post.on` its switches. `post.sway` is the tipsy camera: `amount` (lean and zoom), `ghost` (double vision) and `edges` (blurry edges, from the bloom chain), each 0 to 1. `grades` holds named grades, and `grade` names the one in use. The fields match the Look panel, and [js/post.js](../js/post.js) documents each pass.

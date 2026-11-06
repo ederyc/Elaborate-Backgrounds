@@ -174,14 +174,25 @@
 </main>
 
 <!-- ===================== dialogs ===================== -->
+<dialog id="dlg-recent" class="dlg dlg-wide" aria-labelledby="dlg-recent-h">
+  <div class="dlg-head"><h2 id="dlg-recent-h">Recent scenes</h2><button type="button" class="ibtn" data-close aria-label="Close" data-icon="close"></button></div>
+  <p class="dlg-note">Saved in this browser as you work. Clearing the browser's site data removes them, so save a scene file for anything you want to keep for good.</p>
+  <ul class="recents" id="recent-list"></ul>
+</dialog>
+
 <dialog id="dlg-new" class="dlg" aria-labelledby="dlg-new-h">
   <div class="dlg-head"><h2 id="dlg-new-h">New scene</h2><button type="button" class="ibtn" data-close aria-label="Close" data-icon="close"></button></div>
-  <p class="dlg-note">This replaces the scene you have open. If you want to keep it, use File, Save the scene file first.</p>
+  <p class="dlg-note">The scene you have open stays in File, Recent scenes.</p>
   <div class="templates">
     <button type="button" class="tcard" data-template="lilac">
       <img src="images/lilac-falls.jpg" alt="" loading="lazy" decoding="async">
       <span class="tcard-name">Lilac Falls</span>
       <span class="tcard-note">The project's own scene: falls, a pool and stream, a blossom tree, butterflies.</span>
+    </button>
+    <button type="button" class="tcard" data-template="reef">
+      <img src="images/reef-rave.jpg" alt="" loading="lazy" decoding="async">
+      <span class="tcard-name">Reef Rave</span>
+      <span class="tcard-note">An octopus party in an underwater cave: lasers, neon corals, a star in sunglasses.</span>
     </button>
     <button type="button" class="tcard" data-template="beach">
       <img src="docs/images/beach-day.jpg" alt="" loading="lazy" decoding="async">
@@ -191,7 +202,7 @@
     <button type="button" class="tcard" data-template="study">
       <img src="images/still.jpg" alt="" loading="lazy" decoding="async">
       <span class="tcard-name">Garden study</span>
-      <span class="tcard-note">The study of a stop-motion backdrop by Tamara, every piece editable.</span>
+      <span class="tcard-note">Where the project started: a study of a stop-motion backdrop, every piece editable.</span>
     </button>
   </div>
   <h3 class="dlg-sub" id="blank-h">Or start blank, in the shape of your screen</h3>
@@ -274,12 +285,15 @@
 <script src="js/renderer.js" defer></script>
 <script src="js/scenes/garden-art.js" defer></script>
 <script src="js/scenes/lilac-art.js" defer></script>
+<script src="js/scenes/reef-art.js" defer></script>
 <script src="js/scenes/garden.js" defer></script>
 <script src="js/editor/ui.js" defer></script>
+<script src="js/saves.js" defer></script>
 <script src="js/editor/doc.js" defer></script>
 <script src="js/editor/library.js" defer></script>
 <script src="js/scenes/beach.js" defer></script>
 <script src="js/scenes/lilac.js" defer></script>
+<script src="js/scenes/reef.js" defer></script>
 <script src="js/editor/fields.js" defer></script>
 <script src="js/editor/actions.js" defer></script>
 <script src="js/editor/layers.js" defer></script>
