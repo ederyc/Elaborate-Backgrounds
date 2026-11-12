@@ -917,8 +917,8 @@ suite("tools", async (s, it) => {
 
 // ---------- the desk scene, for the portfolio's hero ----------
 suite("desk", async (s, it) => {
-  // The photo card and headline sit on the upper-left wall, above the desk's diagonal edge.
-  const ZONE = `((x, y, w, h) => x >= w * 0.04 && x < w * 0.45 && y >= h * 0.08 && y < h * 0.6 && y / h < 1 - 0.5625 * (x / h) - 0.02)`;
+  // The photo card and headline sit on the upper-left wall: the brief's whole box, x 4-45% and y 8-60%.
+  const ZONE = `((x, y, w, h) => x >= w * 0.04 && x < w * 0.45 && y >= h * 0.08 && y < h * 0.6)`;
   await it("the headline area is light, warm and plain, so dark text reads on it", async (t) => {
     await t.goto("/editor.html?open=desk");
     await t.eval(pause);

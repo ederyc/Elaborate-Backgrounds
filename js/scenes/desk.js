@@ -3,20 +3,26 @@
   evening, made for the hero of his portfolio. Concept, characters and art
   direction by Eder Yepez Cuevas; every picture is drawn by code.
 
-  A wooden desk on the left, its front edge running up from the bottom-left
-  corner to the middle of the frame. On it, front to back: an open
-  sketchbook with a pencil drawing of the kid hero (a blanket for a cape, a
-  cardboard sword), a pencil lying on it, a game controller, and a laptop
-  turned toward the window, showing the same kid as a pixel sprite in a
-  tiny level. Through the window, a Lodi vineyard at sunset. An acoustic
-  guitar leans under the window and a soccer ball sits on the floor.
+  The camera sits on the left end of a wooden desk and looks across it
+  toward the desk's far right corner, so the top runs away from you in
+  perspective: its back edge along the wall, its front edge coming toward
+  you at the bottom left, the far right corner standing on its legs. A big
+  window fills the right of the wall and runs off the top and right of the
+  frame. On the desk: a laptop in the middle, showing the kid hero as a
+  pixel sprite in a tiny level; beside it, smaller, an open sketchbook with
+  a pencil drawing of the same kid (a blanket for a cape, a cardboard sword)
+  and a pencil lying on it; and an open handheld console. Through the
+  window, a Lodi vineyard at sunset. A steel-string acoustic guitar stands
+  on a stand past the end of the desk, a soccer ball sits under the desk,
+  and soft shafts of evening light come in through the window.
 
   The upper left is kept for the portfolio's photo card and headline: a
   plain, light, still wall. Nothing there moves, boils or glows.
 
   Motion: the pencil lines are redrawn pose by pose (pencil boil), the
-  paper boils, vine leaves rustle, one cloud drifts, a bird crosses, and the
-  laptop's screen flickers gently.
+  paper boils, vine leaves rustle, one cloud drifts, a bird crosses, the
+  laptop's screen flickers gently, the shafts of light shimmer and dust drifts
+  in them.
 
   The bespoke art (wall, desk, sky, cloud, hills, vines) is in desk-art.js.
   Everything else is the editor's own pieces: shapes, pencil lines and
@@ -36,24 +42,56 @@
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
   // ---------- placing things ----------
-  // Every object is built around (0, 0) in its own units, then placed: moved, scaled and turned.
+  // Every object is built around (0, 0) in its own units, then placed: turned by r, scaled by s, and
+  // moved. "k" also squashes it top to bottom after turning, the way a flat thing lying on the desk is
+  // seen from a low camera; squashed shapes become outlines, since a turned, squashed box is no longer a box.
   const at = (g, x, y) => {
-    const c = Math.cos(g.r || 0), s = Math.sin(g.r || 0), k = g.s ?? 1;
-    return [g.x + k * (c * x - s * y), g.y + k * (s * x + c * y)];
+    const c = Math.cos(g.r || 0), s = Math.sin(g.r || 0), K = g.s ?? 1, k = g.k ?? 1;
+    return [g.x + K * (c * x - s * y), g.y + k * K * (s * x + c * y)];
   };
+  const inner = (t, x, y) => at({ x: t.x || 0, y: t.y || 0, s: t.s ?? 1, r: t.r || 0 }, x, y);
+  // A shape's outline in its own units, for squashing.
+  function outlineOf(it) {
+    if (it.shape === "rect") return [[-it.w / 2, -it.h / 2], [it.w / 2, -it.h / 2], [it.w / 2, it.h / 2], [-it.w / 2, it.h / 2]];
+    if (it.shape === "ellipse") { const n = it.w > 0.01 ? 20 : 8; return Array.from({ length: n }, (_, i) => { const t = (i / n) * Math.PI * 2; return [(it.w / 2) * Math.cos(t), (it.h / 2) * Math.sin(t)]; }); }
+    if (it.shape === "path") return it.points;
+    return null;
+  }
   function place(items, g) {
+    const k = g.k ?? 1;
     return items.map((it0) => {
       const it = clone(it0);
       if (it.el === "pencil") {
         it.points = it.points.map((q) => { const [x, y] = at(g, q[0], q[1]); return [r5(x), r5(y), q[2]]; });
-        if (it.size) it.size = r5(it.size * (g.s ?? 1));
+        if (it.size) it.size = r5(it.size * (g.s ?? 1) * (0.5 + 0.5 * k));
         return it;
       }
       const t = it.xf || { x: 0, y: 0, s: 1, r: 0 };
+      const ol = k !== 1 && it.el === "shape" ? outlineOf(it) : null;
+      if (ol) {
+        // Through the shape's own transform, then the placement; the outline is kept around its middle.
+        const pts = ol.map(([x, y]) => at(g, ...inner(t, x, y)));
+        const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+        const was = it.shape;
+        it.shape = "path";
+        it.points = pts.map(([x, y]) => [r5(x - cx), r5(y - cy)]);
+        if (was === "rect") it.round = r5(Math.min(0.004, (it.corner ?? 0.15) * Math.min(it.w, it.h) * 0.5 * (g.s ?? 1) * k));
+        else if (was === "ellipse") it.round = 0;
+        delete it.w; delete it.h; delete it.corner;
+        it.xf = { x: r4(cx), y: r4(cy), s: 1, r: 0 };
+        return it;
+      }
       const [x, y] = at(g, t.x, t.y);
       it.xf = { x: r4(x), y: r4(y), s: r4((t.s ?? 1) * (g.s ?? 1)), r: r4((t.r || 0) + (g.r || 0)) };
+      if (k !== 1 && it.el === "light" && it.h) it.h = r4(it.h * k);
       return it;
     });
+  }
+  // An outline from points in scene units, kept around its middle so it moves like any other piece.
+  function poly(pts, color, o = {}) {
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    return shape({ shape: "path", points: pts.map(([x, y]) => [r5(x - cx), r5(y - cy)]), material: "paper", colors: [color, color], round: 0.0006, xf: { x: r4(cx), y: r4(cy), s: 1, r: 0 }, ...o });
   }
   const grouped = (items, gid) => items.map((it) => ({ ...it, group: gid }));
 
@@ -261,52 +299,97 @@
     ];
   }
 
-  // ---------- the game controller (about 0.12 x 0.075) ----------
-  function controller() {
-    const plastic = { puff: 0.75, rough: 0.05, fuzz: 0, material: "paper" };
-    return [
-      shape({ shape: "blob", material: "paper", colors: ["#6A5466", "#6A5466"], puff: 0.8, shadow: 0.6, rough: 0.05, fuzz: 0, merge: 0.02, name: "Body",
-        lobes: [[-0.038, 0.014, 0.029], [0.038, 0.014, 0.029], [0, -0.006, 0.03], [-0.022, -0.012, 0.026], [0.022, -0.012, 0.026]], xf: { x: 0, y: 0, s: 1, r: 0 } }),
-      rect(-0.031, -0.008, 0.017, 0.0052, "#2E2530", { ...plastic, puff: 0.3, corner: 0.2, name: "D-pad" }),
-      rect(-0.031, -0.008, 0.0052, 0.017, "#2E2530", { ...plastic, puff: 0.3, corner: 0.2, name: "D-pad" }),
-      oval(0.031, -0.016, 0.0072, 0.0072, "#C9973F", { ...plastic, name: "Button" }),
-      oval(0.038, -0.009, 0.0072, 0.0072, "#C07A8C", { ...plastic, name: "Button" }),
-      oval(0.024, -0.009, 0.0072, 0.0072, "#6F9A7E", { ...plastic, name: "Button" }),
-      oval(0.031, -0.002, 0.0072, 0.0072, "#E5D8BC", { ...plastic, name: "Button" }),
-      oval(-0.013, 0.012, 0.014, 0.014, "#2E2530", { ...plastic, name: "Stick" }),
-      oval(0.013, 0.012, 0.014, 0.014, "#2E2530", { ...plastic, name: "Stick" }),
-      oval(-0.0138, 0.0108, 0.008, 0.008, "#4A3E48", { ...plastic, name: "Stick top" }),
-      oval(0.0122, 0.0108, 0.008, 0.008, "#4A3E48", { ...plastic, name: "Stick top" }),
-      rect(0, -0.011, 0.012, 0.003, "#3E3340", { ...plastic, puff: 0.2, corner: 1, name: "Start" }),
+  // ---------- the handheld console, open like a DS: the hinge at (0, 0), 0.14 wide ----------
+  // The top half stands up facing you; the bottom half lies on the desk, squashed by the low view.
+  const DS_W = 0.14, DS_TOP = 0.08, DS_BASE = 0.044;
+  function handheld() {
+    const W = DS_W, TH = DS_TOP, BD = DS_BASE, flare = 0.007;
+    const shell = { material: "paper", puff: 0.6, rough: 0.04, fuzz: 0, shadow: 0 };
+    const flat = { material: "paper", puff: 0.2, rough: 0.02, fuzz: 0, shadow: 0 };
+    // A point on the bottom half: u across (0 to 1), v from the hinge (0) to the front edge (1).
+    const deck = (u, v) => [(-W / 2 - flare * v) + (W + 2 * flare * v) * u, BD * v];
+    const quadPts = (u0, v0, u1, v1) => [deck(u0, v0), deck(u1, v0), deck(u1, v1), deck(u0, v1)];
+    const dot = (u, v, w, color, name, o = {}) => { const [x, y] = deck(u, v); return oval(x, y, w, w * 0.55, color, { ...flat, puff: 0.6, ...o, name }); };
+    const out = [
+      { el: "light", shape: "glow", mode: "shade", w: W * 1.3, h: BD * 1.4, soft: 1, color: "#4A3428", strength: 0.32, name: "Shadow on the desk", xf: { x: 0.004, y: BD * 0.7, s: 1, r: 0 } },
+      path([deck(0, 1), deck(1, 1), [deck(1, 1)[0], BD + 0.007], [deck(0, 1)[0], BD + 0.007]], "#5E3A4C", { ...flat, puff: 0.3, name: "Front edge" }),
+      path(quadPts(0, 0, 1, 1), "#8E5670", { ...shell, colors: ["#7E4C63", "#9A6079"], round: 0.004, name: "Bottom half" }),
+      path(quadPts(0.27, 0.16, 0.73, 0.86), "#2B2228", { ...flat, round: 0.001, name: "Bottom screen bezel" }),
     ];
+    // The bottom screen: a little map, three rooms and the path between them.
+    out.push(path(quadPts(0.3, 0.24, 0.7, 0.78), "#B9D3C4", { ...flat, material: "screen", colors: ["#C5DCCD", "#A9C9C0"], round: 0, name: "Bottom screen" }));
+    for (const [u, v, c] of [[0.37, 0.38, "#E6BE55"], [0.5, 0.62, "#C0566E"], [0.63, 0.38, "#5F9161"]]) out.push(path(quadPts(u - 0.04, v - 0.1, u + 0.04, v + 0.1), c, { ...flat, material: "screen", round: 0, name: "Map room" }));
+    out.push(path(quadPts(0.41, 0.36, 0.59, 0.41), "#7A6A5E", { ...flat, material: "screen", round: 0, name: "Map path" }));
+    // D-pad on the left, four buttons on the right, start and select below them.
+    const [px, py] = deck(0.13, 0.42);
+    out.push(rect(px, py, 0.021, 0.0042, "#2B2228", { ...flat, puff: 0.4, corner: 0.2, name: "D-pad" }));
+    out.push(rect(px, py, 0.0068, 0.0115, "#2B2228", { ...flat, puff: 0.4, corner: 0.2, name: "D-pad" }));
+    out.push(dot(0.87, 0.24, 0.0072, "#E5D8BC", "Button"), dot(0.87, 0.6, 0.0072, "#E6BE55", "Button"), dot(0.82, 0.42, 0.0072, "#6F9A7E", "Button"), dot(0.92, 0.42, 0.0072, "#C0566E", "Button"));
+    out.push(dot(0.85, 0.84, 0.004, "#5E3A4C", "Start"), dot(0.9, 0.84, 0.004, "#5E3A4C", "Select"));
+    out.push(dot(0.06, 0.86, 0.0035, "#9BD39A", "Power light", { material: "screen" }));
+    // The hinge, then the top half, standing.
+    out.push(rect(0, -0.001, W * 0.97, 0.009, "#6E4258", { material: "clay", colors: ["#6E4258", "#6E4258"], puff: 0.8, corner: 1, rough: 0, fuzz: 0, name: "Hinge" }));
+    out.push(rect(0, -TH / 2 - 0.004, W, TH, "#8E5670", { ...shell, colors: ["#A06A84", "#8E5670"], corner: 0.14, shadow: 0.35, name: "Top half" }));
+    out.push(rect(0, -TH / 2 - 0.004, W * 0.7, TH * 0.8, "#2B2228", { ...flat, puff: 0.15, corner: 0.08, name: "Top screen bezel" }));
+    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) out.push(oval(s * (W * 0.42 + j * 0.006), -TH / 2 - 0.016 + i * 0.008, 0.0028, 0.0028, "#5E3A4C", { ...flat, puff: 0, name: "Speaker" }));
+    return out;
+  }
+  // The top screen: the kid again, small, standing on a hill under a sunset, 20 x 15 pixels.
+  function handheldScreen() {
+    const SW = 0.088, SH = 0.066, cols = 20, rows = 15, pw = SW / cols, ph = SH / rows;
+    const pix = { material: "screen", rough: 0, fuzz: 0, puff: 0, shadow: 0, corner: 0 };
+    const grid = Array.from({ length: rows }, () => Array(cols).fill("."));
+    const fill = (r, c0, c1, ch) => { for (let c = c0; c <= c1; c++) if (c >= 0 && c < cols) grid[r][c] = ch; };
+    fill(3, 13, 15, "c"); fill(4, 12, 16, "c"); fill(5, 13, 15, "c");
+    fill(2, 2, 5, "w"); fill(3, 1, 7, "w");
+    fill(10, 0, 4, "h"); fill(10, 14, 19, "h"); fill(9, 1, 3, "h"); fill(9, 16, 18, "h");
+    fill(11, 0, 19, "g");
+    for (let r = 12; r < rows; r++) fill(r, 0, 19, "d");
+    const kid = ["..HH.", ".HSS.", "CSSE.", "CTTTW", "CTTT.", ".B.B."];
+    kid.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== ".") grid[5 + r][7 + c] = ch; }));
+    const out = [rect(0, 0, SW, SH, "#E8B48A", { ...pix, colors: ["#C98AA0", "#F0C48E"], name: "Sky" })];
+    for (let r = 0; r < rows; r++) {
+      let c = 0;
+      while (c < cols) {
+        const ch = grid[r][c];
+        if (ch === ".") { c++; continue; }
+        let e = c;
+        while (e + 1 < cols && grid[r][e + 1] === ch) e++;
+        out.push(rect(-SW / 2 + ((c + e + 1) / 2) * pw, -SH / 2 + (r + 0.5) * ph, (e - c + 1) * pw + 0.0002, ph + 0.0002, PAL[ch], { ...pix, name: "Pixel" }));
+        c = e + 1;
+      }
+    }
+    out.push({ el: "light", shape: "glow", w: 0.13, h: 0.1, soft: 0.8, color: "#F4C9A0", strength: 0.12, flicker: 0.3, name: "Screen glow", xf: { x: 0, y: 0, s: 1, r: 0 } });
+    return out;
   }
 
-  // ---------- the laptop: lid around (0, 0), 0.125 square; the base reaches toward you and the window ----------
+  // ---------- the laptop, facing you: the hinge's middle at (0, 0) ----------
+  // The lid stands up behind the hinge; the base lies on the desk in front of it, wider toward you.
+  const LAP_W = 0.34, LAP_H = 0.215, LAP_D = 0.085;
   function laptop() {
-    const W = 0.125, Hh = 0.125, base = [0.042, 0.052];
-    const hingeL = [-W / 2, Hh / 2], hingeR = [W / 2, Hh / 2];
-    const add = (p, v) => [p[0] + v[0], p[1] + v[1]];
-    const fl = add(hingeL, base), fr = add(hingeR, base);
-    const deck = (u, v) => [hingeL[0] + (hingeR[0] - hingeL[0]) * u + base[0] * v, hingeL[1] + (hingeR[1] - hingeL[1]) * u + base[1] * v];
+    const W = LAP_W, LH = LAP_H, D = LAP_D, FW = W * 1.1;
+    const deck = (u, v) => [(-W / 2) * (1 - v) + (-FW / 2) * v + (W * (1 - v) + FW * v) * u, D * v];
     const quadPts = (u0, v0, u1, v1) => [deck(u0, v0), deck(u1, v0), deck(u1, v1), deck(u0, v1)];
+    const flat = { puff: 0.15, rough: 0.03, fuzz: 0 };
     const out = [
-      path([add(fl, [0, 0.006]), add(fr, [0, 0.006]), fr, fl], "#8E867E", { puff: 0.2, rough: 0.05, fuzz: 0, shadow: 0.55, name: "Base edge" }),
-      path([hingeL, hingeR, fr, fl], "#C2BAAE", { puff: 0.25, rough: 0.05, fuzz: 0, name: "Base" }),
-      path(quadPts(0.08, 0.1, 0.92, 0.55), "#4A4450", { puff: 0.1, rough: 0.02, fuzz: 0, name: "Keyboard" }),
+      { el: "light", shape: "glow", mode: "shade", w: FW * 1.15, h: D * 1.1, soft: 1, color: "#4A3428", strength: 0.3, name: "Shadow on the desk", xf: { x: 0.01, y: D * 0.62, s: 1, r: 0 } },
+      path([deck(0, 1), deck(1, 1), [FW / 2, D + 0.009], [-FW / 2, D + 0.009]], "#8E867E", { ...flat, puff: 0.3, shadow: 0.4, name: "Base edge" }),
+      path(quadPts(0, 0, 1, 1), "#C2BAAE", { ...flat, colors: ["#B5ADA1", "#CCC4B8"], puff: 0.25, round: 0.003, name: "Base" }),
+      path(quadPts(0.07, 0.08, 0.93, 0.5), "#4A4450", { ...flat, puff: 0.1, round: 0.001, name: "Keyboard" }),
     ];
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 10; c++) {
-      const u0 = 0.1 + c * 0.081, v0 = 0.13 + r * 0.103;
-      out.push(path(quadPts(u0, v0, u0 + 0.066, v0 + 0.08), "#625B66", { puff: 0, rough: 0, fuzz: 0, round: 0.0003, name: "Key" }));
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 12; c++) {
+      const u0 = 0.085 + c * 0.0705, v0 = 0.1 + r * 0.098;
+      out.push(path(quadPts(u0, v0, u0 + 0.058, v0 + 0.078), "#635C67", { puff: 0, rough: 0, fuzz: 0, round: 0.0004, name: "Key" }));
     }
-    out.push(path(quadPts(0.36, 0.64, 0.64, 0.92), "#B3AB9F", { puff: 0.1, rough: 0.02, fuzz: 0, name: "Trackpad" }));
-    out.push(rect(-W / 2 - 0.002, 0, 0.005, Hh, "#A49C92", { material: "clay", colors: ["#A49C92", "#A49C92"], puff: 0.4, corner: 0.5, rough: 0, fuzz: 0, name: "Lid edge" }));
-    out.push(rect(0, 0, W, Hh, "#2B2630", { corner: 0.06, puff: 0.3, rough: 0.03, fuzz: 0, shadow: 0.35, name: "Lid" }));
-    out.push(rect(0, Hh / 2 - 0.003, W * 0.32, 0.004, "#1E1A22", { corner: 1, puff: 0.2, rough: 0, fuzz: 0, name: "Hinge" }));
+    out.push(path(quadPts(0.37, 0.6, 0.63, 0.92), "#B0A89C", { ...flat, round: 0.002, name: "Trackpad" }));
+    out.push(rect(0, -LH / 2, W + 0.006, LH + 0.004, "#8E867E", { material: "clay", colors: ["#A49C92", "#8E867E"], puff: 0.4, corner: 0.05, rough: 0, fuzz: 0, shadow: 0.35, name: "Lid edge" }));
+    out.push(rect(0, -LH / 2, W, LH, "#2B2630", { corner: 0.04, puff: 0.25, rough: 0.03, fuzz: 0, name: "Lid" }));
+    out.push(rect(0, -0.004, W * 0.3, 0.007, "#1E1A22", { corner: 1, puff: 0.2, rough: 0, fuzz: 0, name: "Hinge" }));
     return out;
   }
 
   // ---------- the laptop's screen: a tiny level with the kid as a pixel sprite ----------
-  // The screen's own layer, so its picture can be swapped. Pixels are 31 x 25 on a 0.112 x 0.1 screen.
+  // The screen's own layer, so its picture can be swapped. Pixels are 40 x 24 on a 0.3 x 0.18 screen.
   const SPRITE = [
     "........W.",
     "...HHH..W.",
@@ -324,24 +407,27 @@
   const PAL = { H: "#4A3428", S: "#E8B992", E: "#2B2228", T: "#EDE3CC", C: "#8E5670", B: "#3F6B55", K: "#2B2228", W: "#D6B47A", G: "#7A5A3E",
     g: "#5F9161", d: "#8A6446", D: "#6E4E36", b: "#B9804F", m: "#8E5E3A", c: "#E6BE55", w: "#F6F0E2", h: "#86A98D", p: "#EDE5D2", f: "#C0566E" };
   function level() {
-    const cols = 31, rows = 25;
+    const cols = 40, rows = 24;
     const grid = Array.from({ length: rows }, () => Array(cols).fill("."));
     const fill = (r, c0, c1, ch) => { for (let c = c0; c <= c1; c++) if (c >= 0 && c < cols) grid[r][c] = ch; };
-    fill(3, 7, 10, "w"); fill(4, 5, 12, "w");
-    fill(15, 4, 7, "h"); fill(15, 21, 25, "h"); fill(16, 2, 9, "h"); fill(16, 18, 27, "h");
-    for (let r = 17; r <= 18; r++) fill(r, 0, 30, "h");
-    fill(19, 0, 30, "g");
-    for (let r = 20; r <= 24; r++) fill(r, 0, 30, "d");
-    for (const [r, c] of [[21, 3], [22, 12], [21, 19], [23, 25], [22, 28], [23, 7]]) grid[r][c] = "D";
-    fill(12, 19, 25, "b"); fill(13, 19, 25, "m");
-    grid[9][21] = grid[10][21] = "c"; grid[9][23] = grid[10][23] = "c";
-    for (let r = 11; r <= 18; r++) grid[r][28] = "p";
-    grid[10][28] = "c"; fill(11, 29, 30, "f"); fill(12, 29, 29, "f");
-    SPRITE.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== ".") grid[7 + r][7 + c] = ch; }));
+    fill(3, 8, 11, "w"); fill(4, 6, 13, "w");
+    fill(2, 28, 30, "w"); fill(3, 26, 32, "w");
+    fill(14, 3, 6, "h"); fill(14, 21, 25, "h"); fill(15, 1, 8, "h"); fill(15, 18, 28, "h"); fill(15, 33, 36, "h");
+    for (let r = 16; r <= 17; r++) fill(r, 0, cols - 1, "h");
+    fill(18, 0, cols - 1, "g");
+    for (let r = 19; r < rows; r++) fill(r, 0, cols - 1, "d");
+    for (const [r, c] of [[20, 3], [21, 12], [20, 19], [22, 25], [21, 31], [22, 7], [20, 36], [22, 16]]) grid[r][c] = "D";
+    fill(11, 20, 26, "b"); fill(12, 20, 26, "m");
+    grid[8][22] = grid[9][22] = "c"; grid[8][24] = grid[9][24] = "c";
+    grid[14][30] = grid[15][30] = "c";
+    for (let r = 10; r <= 17; r++) grid[r][35] = "p";
+    grid[9][35] = "c"; fill(10, 36, 37, "f"); fill(11, 36, 36, "f");
+    SPRITE.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== ".") grid[6 + r][8 + c] = ch; }));
     return { grid, cols, rows };
   }
+  const SCREEN_W = 0.3, SCREEN_H = 0.18;
   function screen() {
-    const SW = 0.112, SH = 0.1;
+    const SW = SCREEN_W, SH = SCREEN_H;
     const { grid, cols, rows } = level();
     const pw = SW / cols, ph = SH / rows;
     const pix = { material: "screen", rough: 0, fuzz: 0, puff: 0, shadow: 0, corner: 0 };
@@ -360,25 +446,33 @@
         c = e + 1;
       }
     }
-    out.push({ el: "light", shape: "glow", w: 0.2, h: 0.18, soft: 0.8, color: "#BFDCCB", strength: 0.16, flicker: 0.4, name: "Screen glow", xf: { x: 0, y: 0, s: 1, r: 0 } });
+    out.push({ el: "light", shape: "glow", w: 0.5, h: 0.34, soft: 0.8, color: "#BFDCCB", strength: 0.16, flicker: 0.4, name: "Screen glow", xf: { x: 0, y: 0, s: 1, r: 0 } });
     return out;
   }
 
-  // ---------- the window frame (painted sage), the sill and the glass, around the opening's middle ----------
-  function windowFrame(w, h) {
-    const t = 0.024, bar = 0.013, rail = 0.017;
-    const paint = { material: "paper", colors: ["#5C8770", "#5C8770"], puff: 0.45, shadow: 0.35, rough: 0.12, fuzz: 0.05, corner: 0.04 };
+  // ---------- the window frame (painted sage) and the sill, in the wall's perspective ----------
+  // The wall runs away to the right, so its level lines (the top, the rail, the bottom, the sill) all
+  // meet at the vanishing point L.vp; the sides and the mullion stand straight up. Pieces stop just
+  // past the frame's edges, since the window runs off them.
+  function windowFrame(L) {
+    const [x0, x1, yt, yb] = L.win, [vx, vy] = L.vp;
+    const lev = (x, py) => vy + (py - vy) * (vx - x) / (vx - x0);    // the level line through (x0, py), at x
+    const xr = Math.min(x1, L.A + 0.06);
+    const t = 0.028, bar = 0.016, rail = 0.02;
+    const paint = { material: "paper", colors: ["#5C8770", "#5C8770"], puff: 0.45, shadow: 0.35, rough: 0.12, fuzz: 0.05, round: 0.001 };
     const lit = { ...paint, colors: ["#6E9A81", "#6E9A81"] };
-    const meet = -h * 0.04;
-    return [
-      rect(0, meet, w, rail, "", { ...paint, name: "Meeting rail" }),
-      rect(0, 0, bar, h, "", { ...paint, name: "Mullion" }),
-      rect(-w / 2 - t / 2, 0, t, h + 2 * t, "", { ...paint, name: "Left side" }),
-      rect(w / 2 + t / 2, 0, t, h + 2 * t, "", { ...paint, name: "Right side" }),
-      rect(0, -h / 2 - t / 2, w + 2 * t, t, "", { ...lit, name: "Top" }),
-      rect(0, h / 2 + t / 2, w + 2 * t, t, "", { ...paint, name: "Bottom" }),
-      rect(0, h / 2 + t + 0.011, w + 2 * t + 0.07, 0.024, "", { ...lit, colors: ["#7AA48A", "#7AA48A"], shadow: 0.6, puff: 0.5, name: "Sill" }),
-    ].map((it) => (it.el === "shape" && it.colors[0] === "" ? { ...it, colors: paint.colors } : it));
+    const band = (xa, xb, p0, p1, o, name) => poly([[xa, lev(xa, p0)], [xb, lev(xb, p0)], [xb, lev(xb, p1)], [xa, lev(xa, p1)]], "", { ...o, name });
+    const post = (xa, xb, p0, p1, o, name) => poly([[xa, Math.max(-0.06, lev(xa, p0))], [xb, Math.max(-0.06, lev(xb, p0))], [xb, lev(xb, p1)], [xa, lev(xa, p1)]], "", { ...o, name });
+    const out = [
+      band(x0, xr, L.rail - rail / 2, L.rail + rail / 2, paint, "Meeting rail"),
+      post(L.mullion - bar / 2, L.mullion + bar / 2, yt, yb, paint, "Mullion"),
+      post(x0 - t, x0, yt - t, yb + t, lit, "Left side"),
+      x1 < L.A + 0.06 ? post(x1, x1 + t, yt - t, yb + t, paint, "Right side") : null,
+      lev(xr, yt) > -0.01 ? band(x0 - t, xr, yt - t, yt, lit, "Top") : null,
+      band(x0 - t, xr, yb, yb + t, paint, "Bottom"),
+      band(x0 - t - 0.03, xr, yb + t, yb + t + 0.026, { ...lit, colors: ["#7AA48A", "#7AA48A"], shadow: 0.6, puff: 0.5 }, "Sill"),
+    ].filter(Boolean);
+    return out.map((it) => (it.colors[0] === "" ? { ...it, colors: paint.colors } : it));
   }
 
   // ---------- the bird: wings up in one pose, out in the other ----------
@@ -390,25 +484,92 @@
     ];
   }
 
-  // ---------- the acoustic guitar, upright around its body (0.44 tall) ----------
+  // ---------- the acoustic guitar: a steel-string dreadnought, standing, around its body (0.59 tall) ----------
+  // Broad square shoulders and a shallow waist, a sunburst top with cream binding, a black teardrop
+  // pickguard, a pin bridge, a long neck that meets the body at the 14th fret, and a solid headstock
+  // with three tuners a side.
   function guitar() {
-    const wood = { material: "paper", rough: 0.1, fuzz: 0.05 };
-    const lobes = (k) => [[0, 0.03, 0.062 * k], [0, -0.055, 0.047 * k]];
+    const wood = { material: "paper", rough: 0.08, fuzz: 0.04 };
+    const fine = { material: "paper", rough: 0, fuzz: 0, puff: 0 };
+    // The body's outline, the right half from the neck down, mirrored for the left.
+    const half = [[0.04, -0.124], [0.078, -0.106], [0.088, -0.068], [0.076, -0.022], [0.09, 0.028], [0.106, 0.074], [0.09, 0.118]];
+    const body = [...half, [0, 0.138], ...half.slice().reverse().map(([x, y]) => [-x, y])];
+    const scaled = (k, cy = 0.008, dx = 0, dy = 0) => body.map(([x, y]) => [x * k + dx, cy + (y - cy) * k + dy]);
     const out = [
-      shape({ shape: "blob", ...wood, colors: ["#6A3E2C", "#6A3E2C"], puff: 0.4, shadow: 0.55, merge: 0.03, lobes: lobes(1.09), name: "Sides", xf: { x: 0, y: 0, s: 1, r: 0 } }),
-      shape({ shape: "blob", ...wood, colors: ["#D3A266", "#D3A266"], puff: 0.5, merge: 0.03, lobes: lobes(1), grain: 1.4, name: "Top", xf: { x: 0, y: 0, s: 1, r: 0 } }),
-      path([[0.004, -0.008], [0.034, 0.006], [0.042, 0.03], [0.026, 0.044], [0.008, 0.026]], "#5A3424", { ...wood, smooth: true, puff: 0.2, name: "Pickguard" }),
-      oval(0, -0.024, 0.044, 0.044, "#8A5A36", { ...wood, puff: 0.2, name: "Rosette" }),
-      oval(0, -0.024, 0.034, 0.034, "#2A1E1A", { ...wood, puff: 0, name: "Sound hole" }),
-      rect(0, 0.052, 0.042, 0.009, "#3A2620", { ...wood, puff: 0.4, corner: 0.4, name: "Bridge" }),
-      rect(0, -0.19, 0.018, 0.2, "#5A3A2A", { ...wood, puff: 0.4, corner: 0.2, name: "Neck" }),
-      rect(0, -0.19, 0.0135, 0.2, "#33251E", { ...wood, puff: 0.2, corner: 0.1, name: "Fretboard" }),
-      path([[-0.012, -0.288], [0.012, -0.288], [0.015, -0.345], [-0.015, -0.338]], "#4A3022", { ...wood, puff: 0.35, name: "Headstock" }),
+      path(scaled(1, 0.008, 0.008, 0.006), "#3E2318", { ...wood, smooth: true, puff: 0.4, shadow: 0.55, name: "Sides" }),
+      path(scaled(1), "#E9DCC2", { ...wood, smooth: true, puff: 0.5, name: "Binding" }),
+      path(scaled(0.965), "#6E3A1E", { ...wood, smooth: true, puff: 0.4, name: "Sunburst edge" }),
+      path(scaled(0.9), "#A9652E", { ...wood, smooth: true, puff: 0.2, fuzz: 0.12, name: "Sunburst" }),
+      path(scaled(0.8), "#DDA85E", { ...wood, smooth: true, colors: ["#D69D52", "#E4B36C"], puff: 0.3, grain: 1.4, fuzz: 0.12, name: "Spruce top" }),
+      path([[0.026, -0.058], [0.052, -0.054], [0.068, -0.026], [0.066, 0.006], [0.046, 0.026], [0.024, 0.02], [0.03, -0.004], [0.034, -0.03]], "#221815", { ...wood, smooth: true, puff: 0.15, name: "Pickguard" }),
+      oval(0, -0.035, 0.074, 0.074, "#3A2A20", { ...wood, puff: 0.1, name: "Rosette" }),
+      oval(0, -0.035, 0.069, 0.069, "#E3D3B4", { ...wood, puff: 0, name: "Rosette" }),
+      oval(0, -0.035, 0.063, 0.063, "#1C1412", { ...wood, puff: 0, name: "Sound hole" }),
+      rect(0, 0.07, 0.084, 0.017, "#2A1D18", { ...wood, puff: 0.45, corner: 0.6, name: "Bridge" }),
+      rect(0, 0.064, 0.05, 0.0032, "#EFE6D2", { ...fine, puff: 0.3, corner: 1, name: "Saddle" }),
+      oval(0, 0.139, 0.008, 0.006, "#CFC7B6", { ...fine, puff: 0.6, material: "clay", name: "Strap button" }),
     ];
-    for (let i = 0; i < 6; i++) out.push(rect(0, -0.11 - i * 0.026, 0.0135, 0.0012, "#B9AE98", { ...wood, puff: 0, rough: 0, fuzz: 0, name: "Fret" }));
-    for (let i = 0; i < 3; i++) for (const s of [-1, 1]) out.push(oval(s * 0.019, -0.3 - i * 0.014, 0.008, 0.006, "#D9CFB8", { ...wood, puff: 0.6, name: "Tuning peg" }));
-    for (let i = 0; i < 4; i++) out.push(rect(-0.0045 + i * 0.003, -0.118, 0.0006, 0.34, "#A3967D", { ...wood, puff: 0, rough: 0, fuzz: 0, name: "String" }));
+    for (let i = 0; i < 6; i++) out.push(oval(-0.0125 + i * 0.005, 0.072, 0.0042, 0.0042, "#EFE6D2", { ...fine, puff: 0.6, name: "Bridge pin" }));
+    // The neck: the scale runs from the nut to the saddle, frets placed the way real ones are.
+    const nut = -0.372, scale = 0.064 - nut, joint = nut + scale * (1 - 2 ** (-14 / 12));
+    const neckW = (y, k) => k * (0.026 + 0.006 * (y - nut) / (joint - nut));
+    out.push(path([[-neckW(nut, 0.6), nut], [neckW(nut, 0.6), nut], [neckW(joint, 0.62), joint + 0.006], [-neckW(joint, 0.62), joint + 0.006]], "#7A4A2C", { ...wood, puff: 0.4, name: "Neck" }));
+    out.push(path([[-neckW(nut, 0.5), nut], [neckW(nut, 0.5), nut], [neckW(joint, 0.5), joint + 0.004], [-neckW(joint, 0.5), joint + 0.004]], "#2E211B", { ...wood, puff: 0.2, name: "Fretboard" }));
+    const fretY = (n) => nut + scale * (1 - 2 ** (-n / 12));
+    for (let n = 1; n <= 14; n++) { const y = fretY(n); out.push(rect(0, y, neckW(y, 1), 0.0014, "#C9C1B2", { ...fine, name: "Fret" })); }
+    for (const n of [3, 5, 7, 9]) out.push(oval(0, (fretY(n - 1) + fretY(n)) / 2, 0.0042, 0.0042, "#EFE6D2", { ...fine, name: "Inlay" }));
+    for (const s of [-1, 1]) { const y = (fretY(11) + fretY(12)) / 2; out.push(oval(s * 0.0055, y, 0.0038, 0.0038, "#EFE6D2", { ...fine, name: "Inlay" })); }
+    out.push(rect(0, nut, 0.028, 0.0045, "#EFE6D2", { ...fine, puff: 0.3, name: "Nut" }));
+    // The headstock: solid, a little flared, three tuners a side with metal buttons.
+    out.push(path([[-0.014, nut], [0.014, nut], [0.025, nut - 0.074], [0.02, nut - 0.082], [-0.02, nut - 0.082], [-0.025, nut - 0.074]], "#2A1D18", { ...wood, puff: 0.4, shadow: 0.4, name: "Headstock" }));
+    out.push(path([[-0.004, nut - 0.004], [0.004, nut - 0.004], [0.006, nut - 0.016], [-0.006, nut - 0.016]], "#EFE6D2", { ...fine, round: 0.001, name: "Truss rod cover" }));
+    for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {
+      const y = nut - 0.026 - i * 0.02, edge = 0.017 + i * 0.0035;
+      out.push(rect(s * (edge + 0.006), y, 0.012, 0.003, "#B9B2A4", { ...fine, material: "clay", colors: ["#B9B2A4", "#B9B2A4"], puff: 0.4, name: "Tuner shaft" }));
+      out.push(oval(s * (edge + 0.014), y, 0.009, 0.0125, "#D8D0C0", { ...fine, material: "clay", colors: ["#E2DACA", "#B9B2A4"], puff: 0.7, name: "Tuner" }));
+      out.push(oval(s * (edge - 0.006), y, 0.005, 0.005, "#D8D0C0", { ...fine, material: "clay", colors: ["#D8D0C0", "#D8D0C0"], puff: 0.6, name: "String post" }));
+    }
+    // Six strings, nut to saddle; the three wound ones a little thicker and bronze.
+    for (let i = 0; i < 6; i++) {
+      const a = -0.0105 + i * 0.0042, b = -0.0125 + i * 0.005, w = i < 3 ? 0.0009 : 0.0006;
+      out.push(path([[a - w / 2, nut], [a + w / 2, nut], [b + w / 2, 0.064], [b - w / 2, 0.064]], i < 3 ? "#C2A472" : "#D6D0C4", { ...fine, round: 0, name: "String" }));
+    }
     return out;
+  }
+
+  // ---------- the guitar stand: an A-frame in black tube, in the guitar's units ----------
+  // The guitar sits in a padded cradle a little off the floor, its neck held by a yoke. The parts
+  // behind the guitar come first, then the guitar, then the parts in front of it.
+  const STAND_FLOOR = 0.178;
+  function guitarStand() {
+    const metal = { material: "clay", colors: ["#2E2A2C", "#2E2A2C"], puff: 0.6, rough: 0.02, fuzz: 0, shadow: 0 };
+    const rubber = { material: "felt", colors: ["#1E1A1C", "#1E1A1C"], puff: 0.6, rough: 0.05, fuzz: 0.05, shadow: 0 };
+    const tube = (a, b, w, o, name) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), nx = (-dy / L) * w / 2, ny = (dx / L) * w / 2;
+      return path([[a[0] + nx, a[1] + ny], [b[0] + nx, b[1] + ny], [b[0] - nx, b[1] - ny], [a[0] - nx, a[1] - ny]], o.colors[0], { ...o, round: w * 0.3, name });
+    };
+    const hub = [0, 0.15], yokeY = -0.29, F = STAND_FLOOR;
+    const behind = [
+      tube([0, F - 0.004], hub, 0.008, metal, "Back leg"),
+      tube(hub, [0, yokeY + 0.01], 0.008, metal, "Post"),
+      rect(0, yokeY + 0.004, 0.05, 0.007, "#2E2A2C", { ...metal, corner: 1, name: "Yoke" }),
+    ];
+    const front = [
+      tube(hub, [-0.1, F], 0.009, metal, "Leg"),
+      tube(hub, [0.1, F], 0.009, metal, "Leg"),
+      oval(-0.1, F, 0.018, 0.008, "", { ...rubber, name: "Foot" }),
+      oval(0.1, F, 0.018, 0.008, "", { ...rubber, name: "Foot" }),
+      oval(0, F, 0.014, 0.006, "", { ...rubber, name: "Foot" }),
+      tube(hub, [-0.062, 0.118], 0.008, metal, "Cradle arm"),
+      tube(hub, [0.062, 0.118], 0.008, metal, "Cradle arm"),
+      rect(-0.064, 0.118, 0.026, 0.011, "", { ...rubber, corner: 1, name: "Cradle pad" }),
+      rect(0.064, 0.118, 0.026, 0.011, "", { ...rubber, corner: 1, name: "Cradle pad" }),
+      oval(0, hub[1], 0.016, 0.016, "", { ...metal, name: "Hub" }),
+      tube([-0.024, yokeY + 0.006], [-0.022, yokeY - 0.016], 0.008, rubber, "Yoke arm"),
+      tube([0.024, yokeY + 0.006], [0.022, yokeY - 0.016], 0.008, rubber, "Yoke arm"),
+    ];
+    const fix = (it) => (it.colors && it.colors[0] === "" ? { ...it, colors: [...(it.material === "felt" ? rubber : metal).colors] } : it);
+    return { behind: behind.map(fix), front: front.map(fix) };
   }
 
   // ---------- the soccer ball, radius 0.05 ----------
@@ -428,39 +589,49 @@
   }
 
   // ---------- the two layouts ----------
-  // Where each object goes. The art pack's wall and desk read the same layout from "n".
+  // Where each object goes. The art pack's wall and desk shaders hold the same numbers (WIN, VPW,
+  // QB, QF and the rest in desk-art.js) and pick their layout from "n"; change them together.
+  //   vp       where the wall's level lines meet, on the horizon (eye level)
+  //   win      the window opening: left and right x, then its top and bottom y at the left side
+  //   rail     the meeting rail's y at the left side; mullion: its x
+  //   view     the rect the view through the window is painted over, set so its horizon sits at eye level
+  //   k        how much a flat thing on the desk is squashed by the low view
   const LAYOUTS = {
     wide: {
       n: 0, A: 16 / 9,
-      win: [0.99, 0.10, 1.68, 0.69],
-      sketchbook: { x: 0.60, y: 0.835, s: 1, r: -0.28 },
+      vp: [4.2, 0.44],
+      win: [1.0, 2.3, -0.2, 0.545], rail: 0.17, mullion: 1.6,
+      view: [0.7, -0.078, 2.0, 0.762],
+      laptop: { x: 1.0, y: 0.655, s: 1, r: 0 },
+      sketchbook: { x: 0.58, y: 0.782, s: 0.86, r: -0.03, k: 0.8 },
       pencil: { x: -0.085, y: 0.045, s: 1, r: -0.42 },
-      controller: { x: 0.9, y: 0.722, s: 1, r: -0.3 },
-      laptop: { x: 0.878, y: 0.508, s: 1, r: -0.1 },
-      guitar: { x: 1.15, y: 0.785, s: 0.8, r: 0.1 },
-      ball: { x: 1.6, y: 0.838, s: 1, r: 0 },
-      bird: { y: 0.27, from: 0.7, to: 2.0 },
+      handheld: { x: 1.33, y: 0.712, s: 0.9, r: -0.08 },
+      guitar: { x: 1.69, y: 0.716, s: 0.85, r: 0 },   // its stand's feet on the floor at the wall
+      ball: { x: 1.39, y: 0.886, s: 0.85, r: 0 },
+      bird: { y: 0.27, from: 0.95, to: 2.0 },
       sun: [
-        { el: "light", w: 0.2, h: 0.085, skew: -0.8, panes: [2, 2], bar: 0.34, soft: 0.14, color: "#FFB868", strength: 0.22, fade: 0.35, name: "Window light on the desk", xf: { x: 0.748, y: 0.682, s: 1, r: -0.33 } },
-        { el: "light", w: 0.28, h: 0.05, skew: -1.6, panes: [2, 2], bar: 0.2, soft: 0.3, color: "#FFB868", strength: 0.22, fade: 0.2, name: "Window light on the floor", xf: { x: 1.38, y: 0.862, s: 1, r: 0 } },
+        { el: "light", w: 0.36, h: 0.06, skew: -1.0, panes: [2, 2], bar: 0.3, soft: 0.14, color: "#FFB868", strength: 0.22, fade: 0.3, name: "Window light on the desk", xf: { x: 0.7, y: 0.69, s: 1, r: -0.04 } },
+        { el: "light", w: 0.2, h: 0.035, skew: -1.6, panes: [2, 1], bar: 0.2, soft: 0.3, color: "#FFB868", strength: 0.2, fade: 0.2, name: "Window light on the floor", xf: { x: 1.66, y: 0.885, s: 1, r: -0.02 } },
       ],
-      glow: { x: 1.335, y: 0.775, w: 0.86, h: 0.14 },
+      glow: { x: 1.67, y: 0.7, w: 0.42, h: 0.28 },
       focus: [0.889, 0.5],
     },
     tall: {
       n: 1, A: 9 / 19.5,
-      win: [0.066, 0.064, 0.396, 0.388],
-      sketchbook: { x: 0.215, y: 0.815, s: 0.7, r: -0.58 },
+      vp: [2.2, 0.33],
+      win: [0.05, 0.8, 0.03, 0.4], rail: 0.2, mullion: 0.385,
+      view: [-0.15, -0.01, 0.55, 0.54],
+      laptop: { x: 0.25, y: 0.535, s: 0.55, r: 0 },
+      sketchbook: { x: 0.13, y: 0.69, s: 0.5, r: -0.05, k: 0.8 },
       pencil: { x: -0.085, y: 0.045, s: 1, r: -0.42 },
-      controller: { x: 0.375, y: 0.775, s: 0.7, r: -0.75 },
-      laptop: { x: 0.322, y: 0.598, s: 0.66, r: -0.14 },
-      guitar: { x: 0.425, y: 0.64, s: 0.6, r: 0.05 },
-      ball: null, // no floor left for it in the tall frame
-      bird: { y: 0.17, from: -0.25, to: 0.75 },
+      handheld: { x: 0.375, y: 0.648, s: 0.55, r: -0.1 },
+      guitar: { x: 0.415, y: 0.44, s: 0.62, r: 0 },
+      ball: null, // no floor in the tall frame
+      bird: { y: 0.15, from: -0.25, to: 0.75 },
       sun: [
-        { el: "light", w: 0.13, h: 0.06, skew: -0.8, panes: [2, 2], bar: 0.34, soft: 0.14, color: "#FFB868", strength: 0.22, fade: 0.35, name: "Window light on the desk", xf: { x: 0.13, y: 0.83, s: 1, r: -0.62 } },
+        { el: "light", w: 0.16, h: 0.045, skew: -1.0, panes: [2, 2], bar: 0.3, soft: 0.14, color: "#FFB868", strength: 0.22, fade: 0.3, name: "Window light on the desk", xf: { x: 0.12, y: 0.52, s: 1, r: -0.06 } },
       ],
-      glow: { x: 0.231, y: 0.47, w: 0.42, h: 0.1 },
+      glow: { x: 0.3, y: 0.44, w: 0.3, h: 0.08 },
       focus: [0.231, 0.5],
     },
   };
@@ -469,19 +640,20 @@
     const L = LAYOUTS[opts.tall ? "tall" : "wide"];
     const A = L.A, M = 0.06;
     strokeSeed = 1;
-    const [wx0, wy0, wx1, wy1] = L.win;
-    const wcx = (wx0 + wx1) / 2, wcy = (wy0 + wy1) / 2, ww = wx1 - wx0, wh = wy1 - wy0;
-    const view = [wx0 - 0.01, wy0 - 0.01, wx1 + 0.01, wy1 + 0.01];
+    const view = L.view;
 
     // The sketchbook, the drawing on it and the pencil share one layer and one boil, as one object would.
     const sb = L.sketchbook;
-    const drawing = { x: 0.098, y: 0.007, s: 0.14, r: 0 };
+    // The kid fills most of his page, and his lines are drawn a little darker and bolder than a
+    // page seen up close would need, so they still read from across the desk.
+    const drawing = { x: 0.1, y: 0.008, s: 0.162, r: 0 };
+    const bold = (it) => ({ ...it, size: r5(it.size * 1.4), dark: Math.min(1, Math.round(it.dark * 1.18 * 100) / 100) });
     const sketchLayer = {
       id: "sketchbook", name: "Sketchbook", depth: 0.36, boil: 0.9, cycle: { frames: 3, rate: 6 },
       groups: { "group-book": { name: "Sketchbook" }, "group-hero": { name: "Kid hero sketch" }, "group-notes": { name: "Notes" }, "group-pencil": { name: "Pencil" } },
       paint: [
         ...grouped(place(sketchbook(), sb), "group-book"),
-        ...grouped(place(place(heroSketch(), drawing), sb), "group-hero"),
+        ...grouped(place(place(heroSketch().map(bold), drawing), sb), "group-hero"),
         ...grouped(place(notes(), sb), "group-notes"),
         ...grouped(place(place(pencilProp(), L.pencil), sb), "group-pencil"),
       ],
@@ -501,17 +673,21 @@
       { id: "wall-glow", name: "Sunset on the wall", depth: 0.02, boil: 0, paint: [
         { el: "light", shape: "glow", w: L.glow.w, h: L.glow.h, soft: 1, color: "#FFB070", strength: 0.12, name: "Glow under the window", xf: { x: L.glow.x, y: L.glow.y, s: 1, r: 0 } },
       ] },
-      { id: "window", name: "Window frame", depth: 0.03, boil: 0.5, paint: place(windowFrame(ww, wh), { x: wcx, y: wcy, s: 1, r: 0 }) },
-      { id: "guitar", name: "Acoustic guitar", depth: 0.08, boil: 0.8, paint: place(guitar(), L.guitar) },
+      { id: "window", name: "Window frame", depth: 0.03, boil: 0.5, paint: windowFrame(L) },
+      { id: "guitar", name: "Acoustic guitar", depth: 0.08, boil: 0.8, groups: { "group-guitar": { name: "Guitar" }, "group-stand": { name: "Guitar stand" }, "group-stand-front": { name: "Stand, in front" } },
+        paint: (({ behind, front }) => [...grouped(place(behind, L.guitar), "group-stand"), ...grouped(place(guitar(), L.guitar), "group-guitar"), ...grouped(place(front, L.guitar), "group-stand-front")])(guitarStand()) },
       L.ball ? { id: "ball", name: "Soccer ball", depth: 0.12, boil: 0.9, paint: place(ball(), L.ball) } : null,
 
       { id: "desk", name: "Desk", rect: [-M, 0.3, A + M, 1 + M], depth: 0.3, boil: 0.5, paint: [{ shader: "ddesk", n: L.n }] },
+      { id: "sunlight", name: "Window light", depth: 0.33, boil: 0.3, paint: L.sun.map((it) => ({ ...it })) },
       sketchLayer,
-      { id: "sunlight", name: "Window light", depth: 0.36, boil: 0.3, paint: L.sun.map((it) => ({ ...it })) },
-      { id: "controller", name: "Game controller", depth: 0.38, boil: 0.8, groups: { "group-pad": { name: "Controller" } }, paint: grouped(place(controller(), L.controller), "group-pad") },
-      { id: "laptop", name: "Laptop", depth: 0.38, boil: 0.6, groups: { "group-laptop": { name: "Laptop" } }, paint: grouped(place(laptop(), L.laptop), "group-laptop") },
-      { id: "screen", name: "Laptop screen", depth: 0.38, boil: 0.4, cycle: { frames: 4, rate: 4 }, groups: { "group-screen": { name: "Pixel level" } },
-        paint: grouped(place(place(screen(), { x: 0, y: -0.002, s: 1, r: 0 }), L.laptop), "group-screen") },
+      { id: "laptop", name: "Laptop", depth: 0.36, boil: 0.6, groups: { "group-laptop": { name: "Laptop" } }, paint: grouped(place(laptop(), L.laptop), "group-laptop") },
+      { id: "screen", name: "Laptop screen", depth: 0.36, boil: 0.4, cycle: { frames: 4, rate: 4 }, groups: { "group-screen": { name: "Pixel level" } },
+        paint: grouped(place(place(screen(), { x: 0, y: -LAP_H / 2 - 0.004, s: 1, r: 0 }), L.laptop), "group-screen") },
+      { id: "handheld", name: "Handheld console", depth: 0.38, boil: 0.8, groups: { "group-handheld": { name: "Handheld console" }, "group-handheld-screen": { name: "Handheld screen" } },
+        paint: [...grouped(place(handheld(), L.handheld), "group-handheld"), ...grouped(place(place(handheldScreen(), { x: 0, y: -DS_TOP / 2 - 0.004, s: 1, r: 0 }), L.handheld), "group-handheld-screen")] },
+      // In front of everything: the shafts of light in the air, and the dust in them.
+      { id: "rays", name: "Light rays", rect: [-M, -M, A + M, 1 + M], res: 0.5, depth: 0.4, boil: 0.2, anim: { type: "cycle", frames: 24, rate: 4 }, paint: [{ shader: "drays", n: L.n }] },
     ];
 
     return {
