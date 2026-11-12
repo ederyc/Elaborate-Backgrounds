@@ -21,7 +21,7 @@ const args = process.argv.slice(2);
 const useEdge = args.includes("--edge");
 const wanted = args.filter((a) => !a.startsWith("--"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const SAMPLES = ["lilac", "reef", "beach", "study"];
+const SAMPLES = ["lilac", "reef", "beach", "study", "desk", "desk-tall"];
 
 // ---------- a small static server ----------
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".png": "image/png", ".json": "application/json", ".svg": "image/svg+xml" };
@@ -212,7 +212,7 @@ const frames = (n) => `(() => { const R = ${E}.renderer, c = ${E}.clock, gl = R.
 
 // ---------- pages ----------
 suite("pages", async (s, it) => {
-  for (const [url, ready] of [["/index.html", false], ["/study.html", false], ["/editor.html", true], ...SAMPLES.map((k) => [`/editor.html?open=${k}`, true]), ...["lilac", "reef", "beach", "garden"].map((k) => [`/player.html?sample=${k}`, false])]) {
+  for (const [url, ready] of [["/index.html", false], ["/study.html", false], ["/editor.html", true], ...SAMPLES.map((k) => [`/editor.html?open=${k}`, true]), ...["lilac", "reef", "beach", "garden", "desk", "desk-tall"].map((k) => [`/player.html?sample=${k}`, false])]) {
     await it(`${url} loads with no errors`, async (t) => {
       const ms = await t.goto(url, { ready });
       if (!ready) await sleep(2500);
@@ -432,7 +432,7 @@ suite("saves", async (s, it) => {
   });
   await it("scene files round-trip exactly, for every sample and scene shape", async (t) => {
     await t.goto("/editor.html");
-    const r = await t.eval(`(() => { const D = LB.DOC, out = []; const docs = { lilac: D.fromLilac(), reef: D.fromReef(), beach: D.fromBeach(), study: D.fromStudy() }; for (const a of [1.7778, 2.3333, 1.6, 1, 0.4615]) docs["blank" + a] = D.blankDoc(a); for (const [k, d] of Object.entries(docs)) { const a = D.serialize(d), n = D.normalize(JSON.parse(a)), b = D.serialize(n.doc); if (a !== b) { let i = 0; while (a[i] === b[i]) i++; out.push(k + ": differs near " + a.slice(Math.max(0, i - 40), i + 40)); } if (n.warnings.length) out.push(k + ": warned " + n.warnings[0]); } return out; })()`);
+    const r = await t.eval(`(() => { const D = LB.DOC, out = []; const docs = { lilac: D.fromLilac(), reef: D.fromReef(), beach: D.fromBeach(), study: D.fromStudy(), desk: D.fromDesk(), deskTall: D.fromDesk(true) }; for (const a of [1.7778, 2.3333, 1.6, 1, 0.4615]) docs["blank" + a] = D.blankDoc(a); for (const [k, d] of Object.entries(docs)) { const a = D.serialize(d), n = D.normalize(JSON.parse(a)), b = D.serialize(n.doc); if (a !== b) { let i = 0; while (a[i] === b[i]) i++; out.push(k + ": differs near " + a.slice(Math.max(0, i - 40), i + 40)); } if (n.warnings.length) out.push(k + ": warned " + n.warnings[0]); } return out; })()`);
     assert(r.length === 0, r.slice(0, 3).join(" | "));
   });
   const BAD = {
@@ -752,9 +752,237 @@ suite("export", async (s, it) => {
   });
 });
 
+// ---------- the pencil, light and screen ----------
+// A scene that holds still apart from what's being tested: no boil, no camera drift, no grain.
+const quiet = `${E}.ED.change((d) => { d.boil = 0; d.camera.drift = [0, 0]; d.post.on.grain = false; }, "Quiet")`;
+// Average brightness (0 to 255) of a box around a scene point, rendered at beat b.
+const lumAt = (x, y, b = 0, r = 0.02) => `(() => { const R = ${E}.renderer, c = ${E}.clock; c.set(${b} / 12 + 1e-4); R.invalidate(); R.draw(c); const img = R.readPixels(), v = R.view, w = img.width, h = img.height;
+  const px = (sx) => Math.round(((sx - v[0]) / v[2]) * w), py = (sy) => Math.round(((sy - v[1]) / v[3]) * h); let s = 0, n = 0;
+  for (let yy = py(${y} - ${r}); yy < py(${y} + ${r}); yy++) for (let xx = px(${x} - ${r}); xx < px(${x} + ${r}); xx++) { const i = (yy * w + xx) * 4; s += 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2]; n++; } return s / n; })()`;
+// Draws a stroke with the pencil: a wave across the canvas, with a mouse or a pen at a given force.
+async function pencilStroke(t, fx, fy, { pen = false, force = 0.5, steps = 36 } = {}) {
+  const [ax, ay] = await t.at(fx, fy);
+  const extra = pen ? { pointerType: "pen", force } : {};
+  await t.mouse("mouseMoved", ax, ay, extra);
+  await t.mouse("mousePressed", ax, ay, { button: "left", buttons: 1, clickCount: 1, ...extra });
+  for (let i = 1; i <= steps; i++) await t.mouse("mouseMoved", ax + i * 9, ay + Math.sin(i / 4) * 28, { button: "left", buttons: 1, ...extra });
+  await t.mouse("mouseReleased", ax + steps * 9, ay + Math.sin(steps / 4) * 28, { button: "left", clickCount: 1, ...extra });
+  await sleep(250);
+  await t.until(settled);
+}
+const roundTrips = `(() => { const D = LB.DOC, a = D.serialize(${E}.ED.doc), n = D.normalize(JSON.parse(a)); return a === D.serialize(n.doc) && !n.warnings.length; })()`;
+
+suite("tools", async (s, it) => {
+  await it("the Pencil draws freehand, stays on, and groups a sketch", async (t) => {
+    await openBlank(t);
+    const c0 = await t.eval(counts);
+    await t.key("b");
+    assert((await t.eval(`${E}.ED.tool`)) === "pencil", "B didn't pick the pencil");
+    assert(await t.eval(`document.querySelector('[data-tool="pencil"]').getAttribute("aria-pressed") === "true"`), "The rail button doesn't show the pencil as on");
+    await pencilStroke(t, 0.3, 0.4);
+    const r = await t.eval(`(() => { const { ED } = ${E}, L = ED.selLayer(), it = ED.selItem(); return { el: it && it.el, n: it && it.points.length, press: it ? it.points.map((q) => q[2]) : [], cycle: L && L.cycle, tool: ED.tool }; })()`);
+    assert(r.el === "pencil", `It drew a ${r.el}`);
+    assert(r.n >= 6 && r.n <= 64, `The stroke kept ${r.n} points`);
+    assert(Math.min(...r.press) < Math.max(...r.press) - 0.2, "A mouse stroke should taper at its ends");
+    assert(r.cycle && r.cycle.frames >= 2, "Its layer has no poses to redraw it in");
+    assert(r.tool === "pencil", "The pencil didn't stay on for the next stroke");
+    await pencilStroke(t, 0.3, 0.6);
+    const g = await t.eval(`(() => { const { ED } = ${E}, L = ED.selLayer(), it = ED.selItem(); return { group: it.group, members: L.paint.filter((p) => p.group && p.group === it.group).length }; })()`);
+    assert(g.group && g.members === 2, `The second stroke didn't join the first in a sketch (${g.members} in its group)`);
+    assert(await t.eval(`!!document.querySelector('#pane-piece [data-sec="pencil"]') && !!document.querySelector('#pane-piece [data-sec="pencil-boil"]')`), "The Pencil cards aren't in the inspector");
+    const c1 = await t.eval(counts);
+    assert(c1.items === c0.items + 2, `Two strokes added ${c1.items - c0.items} pieces`);
+    await t.key("Escape");
+    assert((await t.eval(`${E}.ED.tool`)) === "select", "Escape didn't put the pencil down");
+    clean(t);
+  });
+  await it("pencil strokes undo and redo, and save and reopen exactly", async (t) => {
+    await openBlank(t);
+    const c0 = await t.eval(counts);
+    await t.key("b");
+    await pencilStroke(t, 0.4, 0.5);
+    const doc = await t.eval(`LB.DOC.serialize(${E}.ED.doc)`);
+    await t.eval(`document.querySelector("#viewport").focus()`);
+    await t.key("z", { ctrl: true });
+    await sleep(150);
+    assert((await t.eval(counts)).items === c0.items, "Undo didn't take the stroke back");
+    await t.key("z", { ctrl: true, shift: true });
+    await sleep(150);
+    assert((await t.eval(`LB.DOC.serialize(${E}.ED.doc)`)) === doc, "Redo didn't give back the same stroke");
+    assert(await t.eval(roundTrips), "A scene with a pencil stroke doesn't reopen exactly");
+    clean(t);
+  });
+  await it("a pen's pressure reaches the line", async (t) => {
+    await openBlank(t);
+    await t.key("b");
+    await pencilStroke(t, 0.25, 0.35, { pen: true, force: 0.2 });
+    const mean = `(() => { const p = ${E}.ED.selItem().points.map((q) => q[2]); return p.reduce((a, b) => a + b, 0) / p.length; })()`;
+    const light = await t.eval(mean);
+    await t.eval(`${E}.ED.select(null)`);
+    await pencilStroke(t, 0.25, 0.65, { pen: true, force: 0.9 });
+    const heavy = await t.eval(mean);
+    metric(s, "Pen pressure kept: light / heavy stroke", `${light.toFixed(2)} / ${heavy.toFixed(2)}`);
+    assert(light < 0.35 && heavy > 0.75, `A light pen gave pressure ${light.toFixed(2)} and a heavy one ${heavy.toFixed(2)}`);
+    clean(t);
+  });
+  await it("pencil lines are redrawn from pose to pose, and each pose is the same every time", async (t) => {
+    await openBlank(t);
+    await t.eval(quiet);
+    await t.key("b");
+    await pencilStroke(t, 0.35, 0.5);
+    await t.key("Escape");
+    await t.eval(`${E}.ED.select(null)`);
+    await t.until(settled);
+    await t.eval(DIFF);
+    // 3 poses at 6 a second: beats 0 and 1 are the first pose, beat 2 the second, beat 6 the first again.
+    const r = await t.eval(`(() => { const R = ${E}.renderer, c = ${E}.clock, at = (b) => { c.set(b / 12 + 1e-4); R.invalidate(); R.draw(c); return R.readPixels().data.slice(); }, w = R.size[0];
+      const a = at(0), b = at(1), d = at(2), e = at(6); return { held: __diff(a, b, w), next: __diff(a, d, w), back: __diff(a, e, w) }; })()`);
+    metric(s, "Pencil boil: change from one pose to the next (of 255)", r.next.toFixed(3));
+    assert(r.held === 0 && r.back === 0, `A pose isn't drawn the same each time (${r.held}, ${r.back})`);
+    assert(r.next > 0.005, `The next pose looks the same as this one (${r.next})`);
+    clean(t);
+  });
+  await it("Light from the store lights what's under it, Shade darkens it, and both undo", async (t) => {
+    await openBlank(t);
+    await t.eval(quiet);
+    const before = await t.eval(lumAt(0.97, 0.56));
+    await t.eval(`${E}.ED.select(null); LB.ACT.addFromEntry(LB.findEntry("window-light"), [0.9, 0.5])`);
+    await t.until(settled);
+    assert((await t.eval(`${E}.ED.selItem().el`)) === "light", "The store didn't add a light");
+    assert(await t.eval(`!!document.querySelector('#pane-piece [data-sec="light"]')`), "The Light card isn't in the inspector");
+    const lit = await t.eval(lumAt(0.97, 0.56));
+    await t.eval(`${E}.ED.change(() => { const it = ${E}.ED.selItem(); it.mode = "shade"; it.color = "#2E1F33"; }, "Shade")`);
+    await sleep(300);
+    await t.until(settled);
+    const shaded = await t.eval(lumAt(0.97, 0.56));
+    metric(s, "Window light at its middle: before / lit / shaded (luma)", `${before.toFixed(0)} / ${lit.toFixed(0)} / ${shaded.toFixed(0)}`);
+    assert(lit > before + 8, `The light only took the brightness from ${before.toFixed(0)} to ${lit.toFixed(0)}`);
+    assert(shaded < before - 8, `Shade only took the brightness from ${before.toFixed(0)} to ${shaded.toFixed(0)}`);
+    await t.eval(`document.querySelector("#viewport").focus()`);
+    await t.key("z", { ctrl: true });
+    await sleep(300);
+    await t.until(settled);
+    const undone = await t.eval(lumAt(0.97, 0.56));
+    assert(Math.abs(undone - lit) < 1, `Undo gave ${undone.toFixed(1)}, not the light's ${lit.toFixed(1)}`);
+    assert(await t.eval(roundTrips), "A scene with light doesn't reopen exactly");
+    clean(t);
+  });
+  await it("the store's Light group shows its pieces with real thumbnails", async (t) => {
+    await openBlank(t);
+    await t.key("a");
+    await t.until(`!!document.querySelector('#store-cats [data-cat="Light"], #store-cats button')`);
+    const ok = await t.eval(`(async () => { const chip = [...document.querySelectorAll("#store-cats button")].find((b) => /Light/.test(b.textContent)); if (!chip) return "no Light chip"; chip.click();
+      for (let i = 0; i < 60; i++) { await new Promise((r) => setTimeout(r, 100)); const imgs = [...document.querySelectorAll("#store-grid img")]; if (imgs.length >= 3 && imgs.every((im) => im.complete && im.naturalWidth)) break; }
+      const names = [...document.querySelectorAll("#store-grid")].map((g) => g.textContent).join(" ");
+      if (!/Window light/.test(names) || !/Soft glow/.test(names) || !/Shade/.test(names)) return "missing pieces: " + names.slice(0, 120);
+      for (const im of document.querySelectorAll("#store-grid img")) { const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight; const x = c.getContext("2d"); x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let a = 0; for (let i = 3; i < d.length; i += 4) a = Math.max(a, d[i]); if (a < 20) return "a thumbnail is empty"; }
+      return "ok"; })()`);
+    assert(ok === "ok", ok);
+    clean(t);
+  });
+  await it("the Screen material glows evenly and flickers only from pose to pose", async (t) => {
+    await openBlank(t);
+    await t.eval(quiet);
+    await t.key("r");
+    const [ax, ay] = await t.at(0.4, 0.4), [bx, by] = await t.at(0.6, 0.6);
+    await t.drag(ax, ay, bx, by);
+    await sleep(200);
+    await t.eval(`${E}.ED.change(() => { const it = ${E}.ED.selItem(); it.material = "screen"; it.colors = ["#9CC2B6", "#9CC2B6"]; it.puff = 1; it.shadow = 0; ${E}.ED.selLayer().cycle = { frames: 4, rate: 4 }; }, "Screen")`);
+    await t.until(settled);
+    await sleep(200);
+    assert(await t.eval(`!!document.querySelector('#pane-piece [data-sec="material"] [data-value="screen"]')`), "Screen isn't in the material picker");
+    const p = await t.eval(`LB.ITEMS.position(${E}.ED.selItem(), ${E}.ED.selLayer())`);
+    const box = await t.eval(`LB.ITEMS.outlineBox(${E}.ED.selItem(), ${E}.ED.selLayer())`);
+    const mid = await t.eval(lumAt(p[0], p[1], 0, 0.01)), edge = await t.eval(lumAt(p[0] + box[0] * 0.8, p[1] + box[1] * 0.8, 0, 0.006));
+    const pose2 = await t.eval(lumAt(p[0], p[1], 3, 0.01)), again = await t.eval(lumAt(p[0], p[1], 12, 0.01));
+    metric(s, "Screen: middle / near a corner / next pose (luma)", `${mid.toFixed(1)} / ${edge.toFixed(1)} / ${pose2.toFixed(1)}`);
+    assert(Math.abs(mid - edge) < 6, `Puff shaded the screen: ${mid.toFixed(1)} in the middle, ${edge.toFixed(1)} near the corner`);
+    assert(Math.abs(pose2 - mid) > 0.1 && Math.abs(pose2 - mid) < 12, `The flicker between poses is ${Math.abs(pose2 - mid).toFixed(2)}`);
+    assert(Math.abs(again - mid) < 0.01, "The same pose isn't the same brightness every loop");
+    clean(t);
+  });
+  await it("bad pencil and light values in a file are repaired or left out", async (t) => {
+    await t.goto("/editor.html");
+    const r = await t.eval(`(() => { const n = LB.DOC.normalize({ layers: [{ id: "a", paint: [
+      { el: "pencil", points: [[0.1, 0.1, 9], [0.2, "x"], [0.3, 0.2, -1]], size: 5, dark: -2 },
+      { el: "pencil", points: [[0.1, 0.1]] },
+      { el: "light", shape: "star", mode: "laser", panes: "many", strength: 99, w: -1, color: "red" } ] }] });
+      const [p, l] = n.doc.layers[0].paint; return { n: n.doc.layers[0].paint.length, pts: p.points, size: p.size, dark: p.dark, l, warned: n.warnings.length }; })()`);
+    assert(r.n === 2 && r.warned === 1, `Expected the one-point line left out with a warning, got ${r.n} pieces and ${r.warned} warnings`);
+    assert(JSON.stringify(r.pts) === "[[0.1,0.1,1],[0.3,0.2,0]]", `Points came out as ${JSON.stringify(r.pts)}`);
+    assert(r.size === 0.06 && r.dark === 0, `Size ${r.size}, darkness ${r.dark}`);
+    assert(!r.l.shape && !r.l.mode && JSON.stringify(r.l.panes) === "[2,2]" && r.l.strength === 2 && r.l.w === 0.004 && !r.l.color, `Light came out as ${JSON.stringify(r.l)}`);
+  });
+});
+
+// ---------- the desk scene, for the portfolio's hero ----------
+suite("desk", async (s, it) => {
+  // The photo card and headline sit on the upper-left wall, above the desk's diagonal edge.
+  const ZONE = `((x, y, w, h) => x >= w * 0.04 && x < w * 0.45 && y >= h * 0.08 && y < h * 0.6 && y / h < 1 - 0.5625 * (x / h) - 0.02)`;
+  await it("the headline area is light, warm and plain, so dark text reads on it", async (t) => {
+    await t.goto("/editor.html?open=desk");
+    await t.eval(pause);
+    const r = await t.eval(`(() => { const R = ${E}.renderer, c = ${E}.clock, inZone = ${ZONE}; R.setView(null); R.resize(1920, 1080); c.set(1e-4); R.invalidate(); R.draw(c);
+      const img = R.readPixels(), d = img.data, w = img.width, h = img.height; let n = 0, s = [0, 0, 0], lo = 1e9, hi = 0;
+      const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+      // 16 px blocks, about a letter stroke at this size, so film grain doesn't count as a dark spot.
+      for (let by = 0; by + 16 <= h; by += 16) for (let bx = 0; bx + 16 <= w; bx += 16) { if (!inZone(bx + 8, by + 8, w, h)) continue; let b = [0, 0, 0];
+        for (let y = by; y < by + 16; y++) for (let x = bx; x < bx + 16; x++) { const i = (y * w + x) * 4; for (let k = 0; k < 3; k++) b[k] += d[i + k]; }
+        b = b.map((v) => v / 256); const L = 0.2126 * lin(b[0]) + 0.7152 * lin(b[1]) + 0.0722 * lin(b[2]); lo = Math.min(lo, L); hi = Math.max(hi, L); for (let k = 0; k < 3; k++) s[k] += b[k]; n++; }
+      const hex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase();
+      const ink = 0.2126 * lin(0x2A) + 0.7152 * lin(0x1C) + 0.0722 * lin(0x33);
+      return { mean: hex(s.map((v) => v / n)), rgb: s.map((v) => v / n), contrast: (lo + 0.05) / (ink + 0.05), spread: hi - lo };
+    })()`);
+    metric(s, "Headline area: mean color", r.mean);
+    metric(s, "Headline area: #2A1C33 text on its darkest 16 px block", `${r.contrast.toFixed(1)} : 1`);
+    // Around #F3E2C6 to #F8EBD6, with a little room either side.
+    const [R0, G0, B0] = r.rgb;
+    assert(R0 >= 0xEE && R0 <= 0xFB && G0 >= 0xDC && G0 <= 0xEE && B0 >= 0xC0 && B0 <= 0xDA, `The mean is ${r.mean}, outside about #F3E2C6 to #F8EBD6`);
+    assert(r.contrast >= 7, `Dark text would only reach ${r.contrast.toFixed(1)} : 1`);
+    assert(r.spread < 0.12, `The area isn't plain: its lightest and darkest blocks differ by ${r.spread.toFixed(3)} in luminance`);
+    clean(t);
+  });
+  await it("the headline area holds still through the whole loop", async (t) => {
+    await t.goto("/editor.html?open=desk");
+    await t.eval(pause);
+    const r = await t.eval(`(() => { const R = ${E}.renderer, c = ${E}.clock, inZone = ${ZONE}; R.setView(null); R.resize(960, 540);
+      const grab = (b) => { c.set(b / 12 + 1e-4); R.invalidate(); R.draw(c); return R.readPixels().data.slice(); };
+      // Grain changes every beat by design, so compare 8 px blocks, which average it out.
+      const blocks = (d) => { const out = []; for (let by = 0; by + 8 <= 540; by += 8) for (let bx = 0; bx + 8 <= 960; bx += 8) { if (!inZone(bx + 4, by + 4, 960, 540)) continue; let s = 0; for (let y = by; y < by + 8; y++) for (let x = bx; x < bx + 8; x++) { const i = (y * 960 + x) * 4; s += d[i] + d[i + 1] + d[i + 2]; } out.push(s / 192); } return out; };
+      const first = blocks(grab(0)); let worst = 0, sum = 0, n = 0;
+      for (let b = 1; b < 72; b++) { const f = blocks(grab(b)); for (let i = 0; i < f.length; i++) { const dd = Math.abs(f[i] - first[i]); worst = Math.max(worst, dd); sum += dd; n++; } }
+      return { worst, mean: sum / n }; })()`);
+    metric(s, "Headline area over 72 beats: mean / largest change of an 8 px block (of 255)", `${r.mean.toFixed(2)} / ${r.worst.toFixed(2)}`);
+    assert(r.worst < 4, `Something moves in the headline area: an 8 px block changes by ${r.worst.toFixed(1)} of 255`);
+    clean(t);
+  });
+  await it("the motion is all there: pencil, vines, cloud, bird and screen move, the wall doesn't", async (t) => {
+    await t.goto("/editor.html?open=desk");
+    await t.eval(pause);
+    const r = await t.eval(`(() => { const { ED } = ${E}, L = (id) => ED.doc.layers.find((l) => l.id === id);
+      return { pencil: L("sketchbook").cycle, vines: L("vines").anim, cloud: L("cloud").anim, bird: L("bird").anim, screen: L("screen").cycle, wall: [L("wall").boil, !!L("wall").anim, L("wall-glow").boil],
+        strokes: L("sketchbook").paint.filter((p) => p.el === "pencil").length, screenGroups: Object.values(L("screen").groups || {}).map((g) => g.name) }; })()`);
+    assert(r.pencil && r.pencil.frames >= 3, "The sketch isn't redrawn pose by pose");
+    assert(r.strokes >= 40, `The kid hero sketch has only ${r.strokes} pencil strokes`);
+    assert(r.vines && r.vines.type === "cycle" && r.cloud && r.cloud.type === "cycle" && r.bird && r.bird.type === "travel" && r.screen, "A moving part is missing");
+    assert(r.wall[0] === 0 && !r.wall[1] && r.wall[2] === 0, "The wall boils or moves");
+    assert(r.screenGroups.length === 1, "The laptop screen isn't its own layer with one group to swap");
+    clean(t);
+  });
+  await it("the tall version puts the window above the desk", async (t) => {
+    await t.goto("/editor.html?open=desk-tall");
+    await t.eval(pause);
+    const r = await t.eval(`(() => { const d = ${E}.ED.doc, L = (id) => d.layers.find((l) => l.id === id), sb = L("sketchbook"), win = L("window").paint;
+      return { aspect: d.aspect, sketchY: LB.ITEMS.position(sb.paint[0], sb)[1], winY: win.reduce((a, it) => a + it.xf.y, 0) / win.length }; })()`);
+    assert(Math.abs(r.aspect - 0.4615) < 0.001, `Aspect ${r.aspect}`);
+    assert(r.winY < 0.5 && r.sketchY > 0.5, `Window at ${r.winY.toFixed(2)}, sketchbook at ${r.sketchY.toFixed(2)}`);
+    clean(t);
+  });
+});
+
 // ---------- speed and leaks ----------
 suite("performance", async (s, it) => {
-  for (const k of ["lilac", "reef", "beach"]) {
+  for (const k of ["lilac", "reef", "beach", "desk"]) {
     await it(`${k}: drawing time per frame`, async (t) => {
       await t.goto(`/editor.html?open=${k}`);
       await t.eval(pause);

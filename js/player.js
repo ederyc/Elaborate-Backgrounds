@@ -6,7 +6,7 @@
   Where the scene comes from, first match wins:
     an embedded <script type="application/json" id="scene-data">   (exported wallpapers)
     ?scene=path/to/scene.json                                        (any scene file on the same site)
-    ?sample=beach | garden | lilac | reef                                           (the built-in scenes)
+    ?sample=beach | garden | lilac | reef | desk | desk-tall                        (the built-in scenes)
 
   Options: ?controls=1 shows a pause button (use it when the page is a
   background behind other content), ?fps=12|8|6, ?quality=low, ?motion=1
@@ -16,6 +16,12 @@
   Running all day is the point, so it only wakes up when there's work:
   a timer sleeps until the next beat, then one frame draws it. Between
   beats nothing runs. It stops entirely while the page is hidden.
+
+  In an iframe, it bakes its layers for the frame's own height rather
+  than the screen's, and the page around it can steer it:
+  postMessage({ player: "play" }) or ({ player: "pause" }). It tells that
+  page { player: "ready", playing } once the first frame is drawn, and
+  { player: "state", playing } whenever it starts or stops.
 */
 (function () {
   const LB = (window.LB = window.LB || {});
@@ -23,6 +29,8 @@
   const canvas = document.getElementById("scene");
   const poster = document.getElementById("poster");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const framed = window.parent !== window;
+  const tell = (msg) => { if (framed) window.parent.postMessage(msg, "*"); };
 
   async function loadScene() {
     const embedded = document.getElementById("scene-data");
@@ -35,6 +43,8 @@
     if (params.get("sample") === "garden" && LB.scenes && LB.scenes.garden) return LB.scenes.garden;
     if (params.get("sample") === "lilac" && LB.scenes && LB.scenes.lilac) return LB.scenes.lilac();
     if (params.get("sample") === "reef" && LB.scenes && LB.scenes.reef) return LB.scenes.reef();
+    if (params.get("sample") === "desk" && LB.scenes && LB.scenes.desk) return LB.scenes.desk();
+    if (params.get("sample") === "desk-tall" && LB.scenes && LB.scenes.desk) return LB.scenes.desk({ tall: true });
     if (LB.scenes && LB.scenes.beach) return LB.scenes.beach();
     throw new Error("no scene to play");
   }
@@ -58,7 +68,7 @@
     try {
       renderer = LB.createRenderer(canvas, doc, {
         quality: params.get("quality") || (small ? "low" : "high"),
-        bakeHeight: Math.min(Math.max(screen.height, window.innerHeight), 1440) * Math.min(window.devicePixelRatio || 1, 2),
+        bakeHeight: Math.min(framed ? window.innerHeight : Math.max(screen.height, window.innerHeight), 1440) * Math.min(window.devicePixelRatio || 1, 2),
       });
     } catch (err) {
       return showPoster(err.message);
@@ -100,12 +110,15 @@
       last = performance.now();
       raf = requestAnimationFrame(frame);
       if (button) { button.textContent = "Pause"; button.setAttribute("aria-label", "Pause the background animation"); }
+      tell({ player: "state", playing });
     }
     function stop() {
+      const was = playing;
       playing = false;
       clearTimeout(timer); cancelAnimationFrame(raf);
       timer = raf = 0;
       if (button) { button.textContent = "Play"; button.setAttribute("aria-label", "Play the background animation"); }
+      if (was) tell({ player: "state", playing });
     }
 
     let button = null;
@@ -121,6 +134,14 @@
     document.addEventListener("visibilitychange", () => (document.hidden ? stop() : wanted && start()));
     reduceMotion.addEventListener("change", (e) => { if (e.matches && params.get("motion") !== "1") { wanted = false; stop(); } });
     window.addEventListener("resize", fit);
+    if (framed) {
+      window.addEventListener("message", (e) => {
+        if (e.source !== window.parent || !e.data) return;
+        // Before the first frame, only remember the wish; boot starts it when ready.
+        if (e.data.player === "play") { wanted = true; if (document.documentElement.dataset.ready) start(); }
+        else if (e.data.player === "pause") { wanted = false; stop(); }
+      });
+    }
 
     await renderer.sync(doc);
     fit();
@@ -128,6 +149,7 @@
     document.documentElement.dataset.ready = "true";
     if (wanted) start();
     else stop();
+    tell({ player: "ready", playing });
   }
 
   boot();

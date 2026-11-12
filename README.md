@@ -12,6 +12,7 @@ Looping stop-motion backgrounds in the browser:
   - the falls are crinkled cellophane, with cotton-wool foam and glass-bead spray;
   - the pools are poured resin, with clear ripple rings and painted gloss.
 - **Reef Rave**, a sample scene ([js/scenes/reef.js](js/scenes/reef.js)): an octopus party in an underwater cave. A laser rig sweeps its beams by replacement frames, neon corals glow on the rock, and a crowd of felt octopuses bounces at 120 beats a minute, each dancer its own group. In front, a clay octopus in white sunglasses. It's seen from inside the party: the lights change color every quarter second, partygoers and string lights right by the lens are out of focus, and the camera leans and sees double.
+- **Desk by the Window** (a placeholder name), a sample scene made for my portfolio's hero ([js/scenes/desk.js](js/scenes/desk.js)): my desk by a window in the evening. An open sketchbook holds a pencil drawing of my kid hero (a blanket for a cape, a cardboard sword), and the laptop beside it shows the same kid as a pixel sprite in a tiny level, sketch to game. Through the window, a Lodi vineyard at sunset; a guitar leans under it and a soccer ball sits on the floor. The upper left is a plain, still wall, kept for a photo card and a headline. The pencil lines are redrawn pose by pose like stop-motion pencil, the vine leaves rustle, a cloud drifts and a bird crosses. `editor.html?open=desk` opens it, and `?open=desk-tall` opens the tall phone version. Concept, characters and art direction are mine; every picture is drawn by code.
 - **The garden study** ([study.html](study.html)), where this started. A real-time WebGL2 recreation of the feel of a looping stop-motion backdrop: a handmade-looking fantasy garden with a waterfall, swaying flowers and a soft, warm, fuzzy filter. It's built as layered parallax quads on a stepped stop-motion clock, with a post stack on top.
 - **The editor** ([editor.html](editor.html)). The study's recipe, turned into a tool for making your own wallpapers: layers at depths, ready-made pieces from a store, shapes you cut and texture yourself, and the whole look as switches and sliders. It exports PNG stills, video loops and scene files.
 - **Beach day**, the editor's sample scene ([js/scenes/beach.js](js/scenes/beach.js)). A girl in a sun hat scoops sand into her bucket while waves roll in, palms sway, gulls fly past and a boardwalk crowd chatters in cardboard quote marks. Every piece is an ordinary editor shape, so all of it can be opened and changed.
@@ -209,6 +210,10 @@ js/scenes/lilac.js         Lilac Falls as a scene file builder: layers, pieces, 
 js/scenes/lilac-art.js     Lilac Falls' bespoke art: sky and moon, hills, the clay cliff, the cellophane falls, the resin water
 js/scenes/reef.js          Reef Rave as a scene file builder: corals, the octopus crowd (one group per dancer), the star
 js/scenes/reef-art.js      Reef Rave's bespoke art: the cave and its light, the sea floor, the laser rig
+js/scenes/desk.js          Desk by the Window (placeholder name) as a scene file builder, wide and tall: the sketchbook and
+                           its pencil drawing, the laptop and its pixel screen, the window, guitar, ball and light
+js/scenes/desk-art.js      Desk by the Window's bespoke art: the wall and floor, the desk, the sunset, the drifting cloud,
+                           the hills and oaks, the vineyard rows
 editor.html                The editor
 player.html                The player: a scene full screen, as a wallpaper or a page background
 css/tokens.css             The portfolio's tokens (copied from Resume/css/style.css)
@@ -219,6 +224,8 @@ js/clock.js                The stepped clock and the 6-second loop
 js/materials.js            Procedural material library: noise, fibers, foliage, paper, clay, beads, light
 js/elements.js             Reusable art elements (canopy, florets, trunk, turf...) and the flower/leaf sprite shader
 js/shapes.js               Shapes people make (outline, material, rough edge, puff, shadow), cut-outs and imported images
+js/pencil.js               Pencil strokes: graphite with pressure and paper tooth, a sketchy second line, redrawn pose by pose
+js/light.js                Light and shade: a window's light thrown across a surface, a soft glow, a see-through shade
 js/clay.js                 3D pieces: parts blended like clay, raymarched once per pose when a layer bakes
 js/items.js                Piece geometry: move/scale/rotate transforms, bounds, hit testing
 js/post.js                 Post-processing shaders

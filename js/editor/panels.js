@@ -32,7 +32,7 @@
   const imageOptions = () => Object.entries(ED.doc.images).map(([id, im]) => [id, im.name]);
 
   const MATERIALS = [["paper", "Paper"], ["felt", "Felt"], ["clay", "Clay"], ["foliage", "Foliage"], ["cardboard", "Cardboard"], ["stripes", "Stripes"],
-    ["gradient", "Wash"], ["water", "Water"], ["sand", "Sand"], ["photo", "Photo"]];
+    ["gradient", "Wash"], ["water", "Water"], ["sand", "Sand"], ["screen", "Screen"], ["photo", "Photo"]];
   const MATERIAL_NAME = Object.fromEntries(MATERIALS);
   const OUTLINES = [["rect", "Rectangle", "rect"], ["ellipse", "Ellipse", "ellipse"], ["polygon", "Polygon or star", "star"], ["blob", "Blob of round lobes", "cloud"], ["path", "Your own outline, point by point", "pen"]];
 
@@ -163,9 +163,10 @@
         { key: "image", label: "Picture", type: "select", options: imageOptions, when: (it) => it.material === "photo" || it.shape === "mask" },
         { key: "tile", label: "Picture tile size", type: "range", min: 0.05, max: 1.5, step: 0.01, ...PX, when: (it) => it.material === "photo" && it.shape !== "mask", fallback: 0.4, reset: 0.4 },
         { key: "tint", label: "Tint toward color", type: "range", ...PCT, when: (it) => it.material === "photo", fallback: 0, reset: 0 },
-        { key: "colors.0", label: (it) => ({ gradient: "Top color", photo: "Tint color", water: "Far water", sand: "Dry sand", stripes: "First stripe" }[it.material] || "Color"), type: "color" },
-        { key: "colors.1", label: (it) => ({ gradient: "Bottom color", water: "Near water", sand: "Wet sand", stripes: "Second stripe", cardboard: "Flecks" }[it.material] || "Tip color"), type: "color",
-          when: (it) => ["gradient", "foliage", "water", "sand", "stripes", "cardboard"].includes(it.material) },
+        { key: "colors.0", label: (it) => ({ gradient: "Top color", photo: "Tint color", water: "Far water", sand: "Dry sand", stripes: "First stripe", screen: "Top of the screen" }[it.material] || "Color"), type: "color" },
+        { key: "colors.1", label: (it) => ({ gradient: "Bottom color", water: "Near water", sand: "Wet sand", stripes: "Second stripe", cardboard: "Flecks", screen: "Bottom of the screen" }[it.material] || "Tip color"), type: "color",
+          when: (it) => ["gradient", "foliage", "water", "sand", "stripes", "cardboard", "screen"].includes(it.material) },
+        { type: "note", when: (it) => it.material === "screen", label: () => L.cycle ? "A screen gives off its own light, so it isn't shaded. It flickers a little from pose to pose, together with every other screen piece in this layer." : "A screen gives off its own light, so it isn't shaded. Give the layer poses (Layer tab) and it flickers a little from one to the next." },
         { key: "stripes.fan", label: "Stripes", type: "choice", options: opts([{ value: "", label: "Straight bands" }, { value: "fan", label: "Fan from a point" }]), when: (it) => it.material === "stripes",
           get: (it) => (it.stripes && it.stripes.fan ? "fan" : ""), set: (it, v) => {
             const b = LB.ELEMENTS.shape.outline(it);
@@ -221,6 +222,10 @@
       f.push({ type: "section", id: "fuzz", label: "Felt ball", icon: "ellipse", color: "var(--pink)" }, { key: "color", label: "Color", type: "color" },
         { key: "radii.0", label: "Width", type: "range", min: 0.005, max: 0.2, step: 0.001, ...PX },
         { key: "radii.1", label: "Height", type: "range", min: 0.005, max: 0.2, step: 0.001, ...PX });
+    } else if (item.el === "pencil") {
+      f.push(...pencilFields(L));
+    } else if (item.el === "light") {
+      f.push(...lightFields(L));
     } else if (item.el === "clay") {
       f.push(...clayFields(item));
     } else if (item.shader) {
@@ -228,6 +233,56 @@
         { type: "note", label: "A bespoke shader from the garden study. You can move, size and turn it; its colors live in the study's code." });
     }
     return f;
+  }
+
+  // A pencil stroke: how it's drawn, and how it's redrawn pose by pose.
+  function pencilFields(L) {
+    const line = (it) => it.kind !== "smudge";
+    return [
+      { type: "section", id: "pencil", label: "Pencil", icon: "pencil", color: "var(--coral)" },
+      { key: "kind", label: "Stroke", type: "choice", fallback: "line",
+        options: opts([{ value: "line", label: "Pencil line", icon: "pencil" }, { value: "smudge", label: "Smudge: graphite rubbed in, or an eraser's ghost", icon: "smudge" }]),
+        get: (it) => it.kind || "line",
+        set: (it, v) => {
+          if (v === "smudge") { it.kind = "smudge"; if ((it.size ?? 0.0025) < 0.008) it.size = 0.016; if ((it.dark ?? 0.8) > 0.35) it.dark = 0.22; }
+          else { delete it.kind; if ((it.size ?? 0) > 0.008) it.size = 0.0025; if ((it.dark ?? 0) < 0.4) it.dark = 0.8; }
+        } },
+      { key: "size", label: (it) => (line(it) ? "Line width" : "Smudge width"), type: "range", min: 0.0005, max: 0.04, step: 0.0001, ...PX, fallback: 0.0025, reset: 0.0025 },
+      { key: "dark", label: "Darkness", type: "range", ...PCT, fallback: 0.8, reset: 0.8, hint: "Like the pencil's grade: low for a hard, light 4H, high for a soft, dark 6B." },
+      { key: "color", label: "Graphite", type: "color", fallback: "#3A3530" },
+      { key: "grain", label: "Paper tooth", type: "range", ...PCT, fallback: 0.7, reset: 0.7, hint: "How much the paper's grain breaks up the line where it's drawn lightly." },
+      { key: "double", label: "Sketchy second line", type: "range", ...PCT, fallback: 0.3, reset: 0.3, when: line, hint: "A fainter line a little to one side, the way a quick drawing gets gone over twice." },
+      { type: "note", label: (it) => `${line(it) ? "A line" : "A smudge"} through ${it.points.length} points, keeping the pressure it was drawn with. Draw more with the Pencil (B).` },
+      { type: "section", id: "pencil-boil", label: "Handmade feel", icon: "sparkle", color: "var(--teal)" },
+      { key: "redraw", label: "Redrawn each pose", type: "range", ...PCT, fallback: 0.5, reset: 0.5, hint: "How far the line wanders when it's redrawn for the next pose. This is pencil boil: each pose is a new drawing, not the same one wobbled." },
+      { type: "note", when: () => !L.cycle, label: "This layer has no poses, so the line holds still apart from the layer's boil. Give the layer poses (Layer tab) and the line is redrawn on every one." },
+      { type: "note", when: () => !!L.cycle, label: () => `${L.name} has ${L.cycle.frames} poses at ${L.cycle.rate} a second, so this line is drawn ${L.cycle.frames} times.` },
+    ];
+  }
+
+  // Window light, glow or shade.
+  function lightFields(L) {
+    const win = (it) => it.shape !== "glow";
+    return [
+      { type: "section", id: "light", label: "Light", icon: "bulb", color: "var(--coral)" },
+      { key: "shape", label: "Shape", type: "choice", fallback: "window", get: (it) => it.shape || "window", set: (it, v) => { if (v === "glow") it.shape = "glow"; else delete it.shape; },
+        options: opts([{ value: "window", label: "Window light: panes thrown across a surface", icon: "window" }, { value: "glow", label: "Soft glow: a round pool of light", icon: "bulb" }]) },
+      { key: "mode", label: "Mode", type: "choice", fallback: "light", get: (it) => it.mode || "light", set: (it, v) => { if (v === "shade") it.mode = "shade"; else delete it.mode; },
+        options: opts([{ value: "light", label: "Light: adds onto what's under it", icon: "sun" }, { value: "shade", label: "Shade: lays its color over what's under it", icon: "moon" }]) },
+      { key: "color", label: "Color", type: "color", fallback: "#FFC27A" },
+      { key: "strength", label: "Strength", type: "range", min: 0, max: 1.5, step: 0.01, scale: 100, suffix: "%", fallback: 0.4, reset: 0.4 },
+      { key: "w", label: "Width", type: "range", min: 0.01, max: 2.4, step: 0.005, ...PX, fallback: 0.3 },
+      { key: "h", label: "Height", type: "range", min: 0.01, max: 1.6, step: 0.005, ...PX, fallback: 0.3 },
+      { key: "skew", label: "Lean", type: "range", min: -2, max: 2, step: 0.01, scale: 100, suffix: "%", fallback: 0, reset: 0, when: win, hint: "Slants it, the way a low sun throws a window across a wall or a desk." },
+      { key: "panes.0", label: "Panes across", type: "range", min: 1, max: 6, step: 1, fallback: 2, reset: 2, when: win },
+      { key: "panes.1", label: "Panes down", type: "range", min: 1, max: 6, step: 1, fallback: 2, reset: 2, when: win },
+      { key: "bar", label: "Window bars", type: "range", ...PCT, fallback: 0.1, reset: 0.1, when: (it) => win(it) && (!it.panes || it.panes[0] > 1 || it.panes[1] > 1) },
+      { key: "soft", label: "Soft edge", type: "range", ...PCT, fallback: 0.3, reset: 0.3 },
+      { key: "fade", label: "Fade toward the bottom", type: "range", min: -1, max: 1, step: 0.01, scale: 100, suffix: "%", fallback: 0, reset: 0, hint: "Below zero it fades toward the top instead. Turn the piece to point the fade anywhere." },
+      { type: "section", id: "light-feel", label: "Handmade feel", icon: "sparkle", color: "var(--teal)", collapsed: true },
+      { key: "flicker", label: "Flicker from pose to pose", type: "range", ...PCT, fallback: 0, reset: 0 },
+      { type: "note", when: () => !L.cycle, label: "Flicker needs poses on the layer (Layer tab)." },
+    ];
   }
 
   function clayFields(item) {
@@ -487,6 +542,8 @@
       return `${outline} · ${MATERIAL_NAME[item.material] || "Paper"}`;
     }
     if (item.el === "clay") return `3D · ${D().titleCase(item.material || "clay")} · ${item.parts.length} part${item.parts.length === 1 ? "" : "s"}`;
+    if (item.el === "pencil") return `Pencil · ${item.kind === "smudge" ? "Smudge" : "Line"}`;
+    if (item.el === "light") return `Light · ${item.mode === "shade" ? "Shade" : item.shape === "glow" ? "Glow" : "Window"}`;
     return { image: "Picture", canopy: "Foliage", florets: "Flowers", trunk: "Trunk", branch: "Branch", turf: "Grass", fuzz: "Felt ball" }[item.el] || D().titleCase(item.el);
   }
 
@@ -519,6 +576,7 @@
         tipRow(["A"], "Add pieces from the store"),
         tipRow(["R", "E", "T"], "Draw a rectangle, ellipse or triangle"),
         tipRow(["P"], "Draw your own outline"),
+        tipRow(["B"], "Draw with the pencil"),
         tipRow(["Space"], "Play or pause"),
         tipRow(["?"], "Every shortcut")));
   }
@@ -766,6 +824,13 @@
 
   function rememberStyle() {
     const it = ED.selItem();
+    if (it && it.el === "pencil") {
+      // The next pencil line is drawn the way this one is set.
+      const own = Object.fromEntries(["kind", "size", "color", "dark", "grain", "double", "redraw"].filter((k) => it[k] != null).map((k) => [k, it[k]]));
+      ED.pencilStyle = D().clone({ ...ACT().PENCIL, ...own });
+      if (!own.kind) delete ED.pencilStyle.kind;
+      return;
+    }
     if (!it || it.el !== "shape") return;
     const { material, colors, rough, fuzz, puff, shadow, grain, specks } = it;
     ED.shapeStyle = D().clone({ material, colors, rough, fuzz, puff, shadow, grain, ...(specks ? { specks } : {}) });

@@ -152,6 +152,14 @@
       return { name: "Spinning duck", depth: 0.5, boil: 1.2, cycle: { frames: 12, rate: 6 }, paint: [it] };
     } },
 
+    // ---- light ----
+    { id: "window-light", cat: "Light", name: "Window light", credit: "Procedural light",
+      item: () => ({ el: "light", w: 0.42, h: 0.3, skew: 0.5, panes: [2, 2], bar: 0.12, soft: 0.25, color: "#FFC27A", strength: 0.45, fade: 0.3 }) },
+    { id: "soft-glow", cat: "Light", name: "Soft glow", credit: "Procedural light",
+      item: () => ({ el: "light", shape: "glow", w: 0.4, h: 0.3, soft: 0.6, color: "#FFB46A", strength: 0.35 }) },
+    { id: "shade", cat: "Light", name: "Shade", credit: "Procedural light",
+      item: () => ({ el: "light", shape: "glow", mode: "shade", w: 0.5, h: 0.3, soft: 0.6, color: "#2E1F33", strength: 0.35 }) },
+
     // ---- sky ----
     { id: "sparkles", cat: "Sky", name: "Sparkles", credit: STUDY, layer: (at) => ({
       type: "sparkles", name: "Sparkles", depth: 0.02, far: true, count: 18, size: 0.0045, color: "#FFF8E6",
@@ -194,5 +202,5 @@
     return { layer };
   }
 
-  LB.LIBRARY = { ENTRIES, CATEGORIES: ["Shapes", "Plants", "Flowers", "Beach", "3D", "Sky", "Your images"], imageEntries, make };
+  LB.LIBRARY = { ENTRIES, CATEGORIES: ["Shapes", "Plants", "Flowers", "Beach", "3D", "Light", "Sky", "Your images"], imageEntries, make };
 })();

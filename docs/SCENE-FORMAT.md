@@ -106,7 +106,7 @@ In a layer with a pose cycle, a piece can list `poses`, one per frame. Each pose
 | --- | --- |
 | `shape` | `rect` (with `corner`, 0 to 1), `ellipse`, `polygon` (with `sides`, and `star` 0 to 1), `blob` (with `lobes`: [x, y, radius] circles blended together, and `merge`), `path`: a custom outline through up to 32 `points`, with `round` to soften its corners and `smooth: true` to draw a curve through them, or `mask`: a cut-out taken from a picture (below) |
 | `w`, `h` | Size, for everything but blobs |
-| `material` | `paper`, `felt`, `clay`, `foliage` (second color = tips), `cardboard` (second color = flecks), `gradient` (top and bottom colors), `water` (far and near colors, with ripple strokes), `sand` (dry and wet colors), `stripes` (below), or `photo` (with `image`, `tile` and `tint`) |
+| `material` | `paper`, `felt`, `clay`, `foliage` (second color = tips), `cardboard` (second color = flecks), `gradient` (top and bottom colors), `water` (far and near colors, with ripple strokes), `sand` (dry and wet colors), `stripes` (below), `screen` (top and bottom colors: a lit screen with faint scan lines; it isn't shaded by `puff`, and in a layer with a pose cycle it flickers a little from pose to pose, together with every screen piece in that layer), or `photo` (with `image`, `tile` and `tint`) |
 | `stripes` | For the stripes material: `{ "width": 0.03 }` for straight bands, or `{ "fan": true, "count": 10, "center": [x, y] }` for stripes fanning out from a point, like a beach umbrella |
 | `grain` | Pattern size multiplier for the material |
 | `rough` | Rough cut edge, 0 to 1 |
@@ -126,6 +126,41 @@ In a layer with a pose cycle, a piece can list `poses`, one per frame. Each pose
 `from` is `dark` (a dark shape on a light background, like paper on white), `light`, or `alpha` (the opaque parts of a PNG). `threshold` (0 to 1) moves where the edge falls. When the material is `photo`, the cut-out shows its own picture edge to edge. The renderer turns the picture into a distance field when it loads (at most 256 px across), so the edge can be roughened, puffed and shadowed like any outline.
 
 **Images**: `{ "el": "image", "image": "img-x1y2z", "w": 0.4, "h": 0.3, "tint": 0, "tintColor": "#FFFFFF" }`.
+
+**Pencil lines** are what the Pencil tool draws: one stroke each, through up to 64 points. Each point is `[x, y, pressure]` in scene units (pressure 0 to 1), so like the study's elements a stroke is placed by its points, and its transform turns and scales it around the middle of its box.
+
+```json
+{ "el": "pencil", "points": [[0.6, 0.4, 0.3], [0.62, 0.41, 0.8], [0.65, 0.41, 0.4]],
+  "size": 0.0025, "color": "#3A3530", "dark": 0.8, "grain": 0.7, "double": 0.3, "redraw": 0.5 }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | Leave it out for a pencil line, or `"smudge"`: a wide, soft, grey stroke, for graphite rubbed in or an eraser's ghost |
+| `size` | The line's width at full pressure, in scene units. It thins with lighter pressure. |
+| `color`, `dark` | The graphite's color and how dark it goes, 0 to 1 (a hard 4H is light, a soft 6B dark) |
+| `grain` | How much the paper's tooth breaks up the line where it's drawn lightly, 0 to 1 |
+| `double` | A fainter second line a little to one side, the way a quick drawing is gone over twice, 0 to 1 |
+| `redraw` | Pencil boil. In a layer with a pose cycle, each pose redraws the line: its points shift along a slow wave, the second line wanders and the pressure changes. 0 holds it still. The redraws are seeded from the stroke's own points, so a stroke redraws the same way every time. |
+
+**Light** lays light or shade over what's under it in the layers behind:
+
+```json
+{ "el": "light", "w": 0.42, "h": 0.3, "skew": 0.5, "panes": [2, 2], "bar": 0.12, "soft": 0.25,
+  "color": "#FFC27A", "strength": 0.45, "fade": 0.3, "xf": { "x": 0.7, "y": 0.8, "s": 1, "r": -0.3 } }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `shape` | Leave it out for a window's light: a soft-edged box split into panes by window bars. `"glow"` is a soft round pool of light. |
+| `mode` | Leave it out for light, which adds its color onto what's under it (it's baked with no coverage). `"shade"` lays its color over what's under it, see-through. |
+| `w`, `h` | Size. Drawn around (0, 0) and placed by the transform, like shapes. |
+| `skew` | Leans a window's light sideways, the way a low sun slants it: x moves by `skew` times y |
+| `panes`, `bar` | Panes across and down (1 to 8), and the bars' width as a share of the light's smaller side |
+| `soft` | How soft the edge is, as a share of the smaller side, 0 to 1 |
+| `strength` | 0 to 2 |
+| `fade` | Dims it toward its bottom edge (toward the top when negative), -1 to 1. Turn the piece to point the fade. |
+| `flicker` | In a layer with a pose cycle, changes the strength a little from pose to pose, 0 to 1 |
 
 **3D pieces** are sculpts of up to 16 parts, in scene units around the piece's center: x to the right, y down, z toward the viewer.
 

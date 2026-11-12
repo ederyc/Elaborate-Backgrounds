@@ -449,6 +449,52 @@
     ACT.addItem(item, "Draw an outline");
   };
 
+  // ======================= the pencil =======================
+  // The look of the last pencil line someone edited, so the next line matches it.
+  ED.pencilStyle = null;
+  const PENCIL = { size: 0.0025, color: "#3A3530", dark: 0.8, grain: 0.7, double: 0.3, redraw: 0.5 };
+  // A pose cycle for pencil: 3 drawings, each held for 2 beats at 12 a second, the way pencil boil is shot.
+  const PENCIL_CYCLE = { frames: 3, rate: 6 };
+  ACT.PENCIL = PENCIL;
+
+  // One stroke from the Pencil tool: points are [x, y, pressure] in scene units. It goes into the
+  // selected layer (or a new "Pencil sketch" layer), and strokes drawn one after another join the
+  // sketch that's selected, so a drawing moves as one group.
+  ACT.pencilStroke = function (points) {
+    const item = { el: "pencil", ...D().clone(ED.pencilStyle || PENCIL), id: D().uid("item"),
+      points: points.slice(0, LB.ELEMENTS.pencil.MAX).map((q) => [r5(q[0]), r5(q[1]), Math.round((q[2] ?? 0.7) * 1000) / 1000]) };
+    const L0 = ED.selLayer(), prev = ED.selItem(), prevGroup = ED.sel.group || (prev && prev.group) || null;
+    let host = null, made = false, cycled = false;
+    ED.change((doc) => {
+      if (isPaint(L0) && !L0.locked && !(L0.anim && L0.anim.type === "cycle")) host = L0;
+      else {
+        const names = new Set(doc.layers.map((L) => L.name));
+        let name = "Pencil sketch", n = 2;
+        while (names.has(name)) name = `Pencil sketch ${n++}`;
+        host = makeLayer({ name, boil: 0.6, cycle: { ...PENCIL_CYCLE } });
+        insertLayer(doc, host);
+        made = true;
+      }
+      // Pencil redraws pose by pose, so a layer without poses gets them.
+      if (!host.cycle && (item.redraw ?? 0.5) > 0) { host.cycle = { ...PENCIL_CYCLE }; cycled = true; }
+      let at = host.paint.length;
+      if (host === L0 && prevGroup && host.groups && host.groups[prevGroup]) {
+        item.group = prevGroup;
+        at = host.paint.reduce((last, it, i) => (it.group === prevGroup ? i + 1 : last), at);
+      } else if (host === L0 && prev && prev.el === "pencil" && !prev.group) {
+        const gid = D().groupId(host);
+        host.groups = host.groups || {};
+        host.groups[gid] = { name: "Sketch" };
+        prev.group = item.group = gid;
+        at = host.paint.indexOf(prev) + 1;
+      }
+      host.paint.splice(at, 0, item);
+    }, "Draw with the pencil");
+    ED.select(host.id, item.id);
+    if (made) say(`Drawing in a new layer, ${host.name}. Each pose redraws the lines, so they boil like stop-motion pencil.`);
+    else if (cycled) say(`${host.name} now has ${host.cycle.frames} poses, so its pencil lines are redrawn on every one.`);
+  };
+
   // ======================= cut-outs from pictures =======================
   // Looks at a picture to guess what the cut-out is: see-through parts, or a dark shape on a light
   // background (paper on white), or a light shape on a dark one.

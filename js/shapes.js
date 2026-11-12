@@ -4,7 +4,8 @@
 
     shape   a cut-out: rectangle, ellipse, polygon or star, or a blob of
             round lobes. Filled with a material (paper, felt, clay,
-            foliage, a two-color gradient, or a photo the user imported),
+            foliage, a two-color gradient, a lit screen, or a photo the
+            user imported),
             with a rough cut edge, a fiber fuzz, a "puff" that shades it
             like a stuffed or sculpted piece, beads, and a soft shadow cast
             down and to the right, away from the scene's top-left light.
@@ -36,7 +37,7 @@ uniform vec2 uMid;        // center of the outline box (blobs and custom outline
 uniform sampler2D uMask;  // a picture's distance field, for cut-outs
 uniform float uMaskPx;    // scene units per distance-field pixel
 uniform vec4 uForm;       // corner roundness 0..1, sides, star depth 0..1, 0
-uniform int uMat;         // 0 paper, 1 felt, 2 clay, 3 foliage, 4 gradient, 5 photo, 6 water, 7 sand, 8 stripes, 9 cardboard
+uniform int uMat;         // 0 paper, 1 felt, 2 clay, 3 foliage, 4 gradient, 5 photo, 6 water, 7 sand, 8 stripes, 9 cardboard, 10 screen
 uniform vec3 uCol1, uCol2;
 uniform float uGrain;     // pattern size multiplier
 uniform vec4 uLook;       // edge roughness (scene units), puff 0..1, shadow 0..1, fuzz 0..1
@@ -169,6 +170,12 @@ void main() {
     u += (m1 - 0.5) * 0.12;
     float band = smoothstep(0.47, 0.53, abs(fract(u) - 0.5) * 2.0);
     c = mix(uCol1, uCol2, band) * (0.92 + 0.12 * pap) * (0.96 + 0.06 * br);
+  } else if (uMat == 10) {
+    // A lit screen: top color to bottom color, faint scan lines, and a flicker from pose to pose that
+    // every screen piece in the layer shares. It gives off its own light, so the puff doesn't shade it.
+    c = mix(uCol1, uCol2, tY);
+    c *= 0.965 + 0.035 * sin(p.y * 2300.0);
+    c *= 1.0 + 0.06 * (hash12(vec2(uFrame + 1.0, 7.3)) - 0.5);
   } else {
     // Cardboard: kraft fibers, faint corrugation showing through, a few darker flecks.
     c = uCol1 * (0.86 + 0.16 * fz) * (0.95 + 0.08 * m1);
@@ -184,7 +191,7 @@ void main() {
   g = gLen > 0.0 ? g / gLen : vec2(0.0);
   float h = clamp(-d / uPuffW, 0.0, 1.0);
   vec3 n = vec3(g * uLook.y * pow(1.0 - h, 1.5) * 2.2, 1.0);
-  c *= lit(vec3(1.0), n, 1.0) / lit(vec3(1.0), vec3(0.0, 0.0, 1.0), 1.0) * mix(1.0, 0.82 + 0.18 * h, uLook.y);
+  if (uMat != 10) c *= lit(vec3(1.0), n, 1.0) / lit(vec3(1.0), vec3(0.0, 0.0, 1.0), 1.0) * mix(1.0, 0.82 + 0.18 * h, uLook.y);
 
   float a = clamp(0.5 - (d + (fz - 0.5) * uLook.w * 5.0 * uPx) / (1.4 * uPx), 0.0, 1.0);
   float blur = 0.004 + 0.012 * uLook.z;
@@ -209,7 +216,7 @@ void main() {
 }`;
 
   const SHAPES = ["rect", "ellipse", "polygon", "blob", "path", "mask"];
-  const MATERIALS = ["paper", "felt", "clay", "foliage", "gradient", "photo", "water", "sand", "stripes", "cardboard"];
+  const MATERIALS = ["paper", "felt", "clay", "foliage", "gradient", "photo", "water", "sand", "stripes", "cardboard", "screen"];
 
   const half = (el) => [Math.max(el.w || 0.2, 0.002) / 2, Math.max(el.h || 0.2, 0.002) / 2];
   function lobeBounds(el) {

@@ -48,11 +48,13 @@
       if (it.shape === "polygon") return it.star > 0.05 ? "star" : it.sides === 3 ? "triangle" : "shapes";
       return "shapes";
     }
+    if (it.el === "pencil") return it.kind === "smudge" ? "smudge" : "pencil";
+    if (it.el === "light") return it.shape === "glow" ? "bulb" : "window";
     return { image: "image", canopy: "plant", florets: "flower", trunk: "plant", branch: "leaf", turf: "plant", fuzz: "ellipse", clay: "cube" }[it.el] || "shapes";
   }
   function itemColor(it) {
     if (it.material === "photo") return null;
-    return (it.colors && it.colors[0]) || it.color || (it.parts && it.parts[0] && it.parts[0].color) || null;
+    return (it.colors && it.colors[0]) || it.color || (it.parts && it.parts[0] && it.parts[0].color) || (it.el === "pencil" ? "#3A3530" : null);
   }
   const MOTION_ICON = { drift: "drift", sway: "sway", travel: "travel", cycle: "film" };
   const MOTION_NAME = { drift: "drifts", sway: "sways", travel: "travels across", cycle: "plays baked frames" };

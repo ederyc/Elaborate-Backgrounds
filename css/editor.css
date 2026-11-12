@@ -429,6 +429,7 @@ body.is-sorting, body.is-sorting * { cursor: grabbing !important; user-select: n
 .ov-stalk { stroke: var(--sun); stroke-width: 1.6; }
 .ov-draw { fill: color-mix(in srgb, var(--sun) 14%, transparent); stroke: var(--sun); stroke-width: 1.6; stroke-dasharray: 6 4; animation: ants 0.8s linear infinite; }
 .ov-ctrl { fill: none; stroke: #FFFDF8; stroke-opacity: .75; stroke-width: 1; stroke-dasharray: 3 3; }
+.ov-pencil { stroke: #3A3530; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 1.5px rgba(255, 253, 248, 0.9)); }
 .ov-point { fill: #FFFDF8; stroke: #1B1426; stroke-width: 1.5; }
 .ov-point.is-selected, .ov-point.is-first { fill: #FFC94A; }
 .ov-mid { fill: rgba(20, 14, 30, 0.55); stroke: #FFFDF8; stroke-width: 1.2; }

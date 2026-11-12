@@ -356,7 +356,7 @@ void main() {
         let box = rect;
         if (item.sprite) LB.SPRITE.set(gl, pr.u, L);
         else if (item.el) {
-          LB.ELEMENTS[item.el].set(gl, pr.u, item, t);
+          LB.ELEMENTS[item.el].set(gl, pr.u, item, t, frame);
           box = I.worldBox(item, host);
         } else if (!I.isIdentity(item)) box = I.worldBox(item, host);
         // Only touch the pixels this item can cover, in tiles so no single draw runs long.
@@ -852,9 +852,10 @@ void main() {
         freeTarget(gl, t);
         dirty = true;
         // The bake writes row 0 at the top of the rect, so rows are already top first. Undo premultiplication.
+        // Light adds onto what's under it (color with no coverage), so it's shown as color as bright as it adds.
         const out = new Uint8ClampedArray(px.length);
         for (let i = 0; i < px.length; i += 4) {
-          const a = px[i + 3];
+          const a = Math.max(px[i + 3], px[i], px[i + 1], px[i + 2]);
           const m = a ? 255 / a : 0;
           out[i] = px[i] * m; out[i + 1] = px[i + 1] * m; out[i + 2] = px[i + 2] * m; out[i + 3] = a;
         }

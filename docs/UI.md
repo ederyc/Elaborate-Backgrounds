@@ -15,7 +15,7 @@ The editor borrows from the scenes it makes instead of from Photoshop or Illustr
 | Area | What's there |
 | --- | --- |
 | Top bar | Scene name, the save chip, File / Edit / View / Help menus, undo and redo, the theme switch, shortcuts, Present and Export |
-| Rail (left edge) | The + button that opens the store, then the tools: select, pan, five shapes, the pen |
+| Rail (left edge) | The + button that opens the store, then the tools: select, pan, five shapes, the pen, the pencil |
 | Recent scenes | A dialog from the File menu: a card for each scene saved in this browser, newest first, with a picture and when it was last edited. The open one says *Open now*; the others can be removed, with Undo in the toast |
 | Store drawer | Slides out over the layers from the + button: search, group chips, piece cards |
 | Layers | The depth diagram, then the rows, front at the top, with buttons for new, duplicate, forward, backward and delete |
@@ -79,6 +79,9 @@ The function is `depthColor()` in ui.js.
 - **Section card.** An icon in the subject's accent color, a title, and a fold chevron (remembered per card). Some cards have a switch in the header, for the post passes: off dims the body.
 - **Number field.** A slider plus an exact value. The label scrubs: drag it sideways to change the value (Shift is faster, Alt finer), and double-click it to reset. Arrow keys step the value in the box.
 - **Pickers.** Outlines and motions are icon segments. Materials are tiles rendered with the piece's own colors. Look presets are small renders of your scene in each look.
+- **Pencil.** The last tool on the rail (B). It draws freehand and stays on until Escape, so a drawing can be many strokes. A pen's pressure is used as it comes; with a mouse, slower strokes press harder and the ends taper. The stroke shows as a grey line while it's drawn, then bakes as graphite. Each stroke is one piece. Strokes drawn one after another join the selected sketch as a group, and a layer without poses gets three, so the lines are redrawn on each one (pencil boil). Its inspector cards are Pencil (coral: stroke or smudge, width, darkness, graphite color, paper tooth, the sketchy second line) and Handmade feel (teal: how far each redraw wanders). The next stroke takes the settings of the last one changed.
+- **Light.** A store group (sun) with Window light, Soft glow and Shade. Its inspector cards are Light (coral: shape, light or shade, color, strength, size, lean, panes and bars, soft edge, fade) and Handmade feel (teal, folded: flicker).
+- **Screen material.** A tile in the Material card: a lit screen that isn't shaded by puff and flickers a little from pose to pose.
 - **Toasts** replace the old status line. They slide up over the canvas, and a delete carries an Undo button.
 - **Menus** on the menubar, and on right-click over pieces, rows and the empty canvas. All of them work with the arrow keys, Enter and Escape.
 - **Tooltips** show after a short hover, or on keyboard focus, with the shortcut beside the label.

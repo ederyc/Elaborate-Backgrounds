@@ -87,6 +87,8 @@
       return `${titleCase(item.material || "paper")} ${kind}`;
     }
     if (item.el === "image") return (doc && doc.images[item.image] && doc.images[item.image].name) || "Image";
+    if (item.el === "pencil") return item.kind === "smudge" ? "Pencil smudge" : "Pencil line";
+    if (item.el === "light") return item.mode === "shade" ? "Shade" : item.shape === "glow" ? "Glow" : "Window light";
     return ITEM_NAMES[item.el] || titleCase(item.el);
   }
   function layerKind(L) {
@@ -133,6 +135,11 @@
   // Reef Rave, an octopus party in an underwater cave.
   function fromReef() {
     return normalize(LB.scenes.reef()).doc;
+  }
+
+  // The desk by the window at sunset (a placeholder name), wide or tall.
+  function fromDesk(tall = false) {
+    return normalize(LB.scenes.desk({ tall })).doc;
   }
 
   function fromStudy() {
@@ -230,6 +237,22 @@
         if (item.boilImages) {
           item.boilImages = item.boilImages.filter((id) => d.images[id]).slice(0, 2);
           if (!item.boilImages.length) delete item.boilImages;
+        }
+        if (item.el === "pencil") {
+          const v = (x) => typeof x === "number" && isFinite(x);
+          item.points = (Array.isArray(item.points) ? item.points : []).filter((q) => Array.isArray(q) && v(q[0]) && v(q[1]))
+            .slice(0, LB.ELEMENTS.pencil.MAX).map((q) => [q[0], q[1], num(q[2], 0.7, 0, 1)]);
+          if (item.points.length < 2) { warnings.push(`A pencil line in "${L.name}" was left out: it needs at least two points.`); return false; }
+          if (item.kind !== "smudge") delete item.kind;
+          if (item.color != null && !isHex(item.color)) delete item.color;
+          for (const [k, lo, hi] of [["size", 0.0004, 0.06], ["dark", 0, 1], ["grain", 0, 1], ["double", 0, 1], ["redraw", 0, 1]]) if (item[k] != null) item[k] = num(item[k], undefined, lo, hi);
+        }
+        if (item.el === "light") {
+          if (item.shape !== "glow") delete item.shape;
+          if (item.mode !== "shade") delete item.mode;
+          if (item.color != null && !isHex(item.color)) delete item.color;
+          if (item.panes != null) item.panes = Array.isArray(item.panes) ? [Math.round(num(item.panes[0], 2, 1, 8)), Math.round(num(item.panes[1], 2, 1, 8))] : [2, 2];
+          for (const [k, lo, hi] of [["w", 0.004, 4], ["h", 0.004, 3], ["skew", -3, 3], ["bar", 0, 1], ["soft", 0, 1], ["strength", 0, 2], ["fade", -1, 1], ["flicker", 0, 1]]) if (item[k] != null) item[k] = num(item[k], undefined, lo, hi);
         }
         if (item.el === "clay") {
           const v3 = (v) => Array.isArray(v) && v.length === 3 && v.every((x) => typeof x === "number" && isFinite(x));
@@ -476,6 +499,6 @@
     return moved;
   }
 
-  LB.DOC = { mergeProblem, mergeLayers, groupId, cycleText, FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, fromLilac, fromReef, normalize, serialize,
+  LB.DOC = { mergeProblem, mergeLayers, groupId, cycleText, FORMAT, VERSION, A, ASPECTS, PRESETS, BASE_POST, ALL_ON, clone, uid, titleCase, itemName, layerKind, blankDoc, fromStudy, fromBeach, fromLilac, fromReef, fromDesk, normalize, serialize,
     dbAll, dbPut, PACK_FORMAT, normalizePiece, normalizePack };
 })();

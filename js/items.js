@@ -34,7 +34,7 @@
   }
 
   function origin(item, layer) {
-    if (item.el === "shape" || item.el === "image") return [0, 0];
+    if (item.el === "shape" || item.el === "image" || item.el === "light") return [0, 0];
     const b = rawBox(item, layer);
     return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
   }
@@ -69,6 +69,8 @@
   // The box a person thinks of as the item: a shape's outline without its shadow.
   function outlineBox(item, layer) {
     if (item.el === "shape") return LB.ELEMENTS.shape.outline(item);
+    if (item.el === "light") return LB.ELEMENTS.light.outline(item);
+    if (item.el === "pencil") return LB.ELEMENTS.pencil.bounds(item);
     return rawBox(item, layer);
   }
 
@@ -81,9 +83,12 @@
   // Is a scene point on this item? Exact for shapes and lobes, the outline box for everything else.
   function hit(item, layer, p) {
     const q = toLocal(item, layer, p);
+    // A pencil line is picked within a few pixels of it, even where it's thinner than that.
+    if (item.el === "pencil") return LB.ELEMENTS.pencil.distance(item, q) <= Math.max((item.size ?? 0.0025) * (item.kind === "smudge" ? 0.6 : 1), 0.006);
     const b = outlineBox(item, layer);
     if (q[0] < b[0] || q[0] > b[2] || q[1] < b[1] || q[1] > b[3]) return false;
     if (item.el === "clay") return LB.ELEMENTS.clay.hit(item, q);
+    if (item.el === "light") return LB.ELEMENTS.light.inside(item, q);
     if (item.el === "shape" && item.shape === "mask") {
       const m = LB.maskInfo && LB.maskInfo(LB.ELEMENTS.shape.maskKey(item));
       if (!m) return true;

@@ -14,6 +14,10 @@
     Shape tools  drag out a box to draw a shape into the selected layer.
     Pen          click to place points; click the first point, double-click
                  or press Enter to close the outline.
+    Pencil       draw freehand. A pen's pressure is used as it comes; with a
+                 mouse, slower strokes press harder and the ends taper. Each
+                 stroke is one piece; strokes drawn one after another join
+                 the selected sketch. The tool stays on until Escape.
     Points       double-click a cut-out (or press Enter) to edit its points:
                  drag a point, drag a + between two points to add one,
                  Alt-click a point to remove it. Keys: [ and ] pick a point,
@@ -43,6 +47,7 @@
   let drag = null;
   let hover = null;
   let pen = null;           // { pts: [scene points], at: last pointer position }
+  let sketch = null;        // the pencil stroke being drawn: { pts: [[x, y, pressure]], last, t, pen }
   let pan = null;           // { x, y, c0 }
   let presenting = false;
   ED.tool = "select";
@@ -360,6 +365,10 @@
       if (s.x != null) { const x = toScreen([s.x, 0])[0]; overlay.append(el("line", { class: "ov-snap", x1: x, y1: 0, x2: x, y2: H })); }
       else { const y = toScreen([0, s.y])[1]; overlay.append(el("line", { class: "ov-snap", x1: 0, y1: y, x2: W, y2: y })); }
     }
+    if (sketch && sketch.pts.length) {
+      overlay.append(el("polyline", { class: "ov-pencil", points: sketch.pts.map((q) => toScreen(q).join(",")).join(" "), fill: "none" }));
+      return;
+    }
     if (pen && pen.pts.length) {
       const pts = [...pen.pts, ...(pen.at ? [pen.at] : [])].map(toScreen);
       overlay.append(el("polyline", { class: "ov-draw", points: pts.map((q) => q.join(",")).join(" "), fill: "none" }));
@@ -520,6 +529,11 @@
       drawOverlay();
       return;
     }
+    if (ED.tool === "pencil") {
+      sketch = { pts: [[p[0], p[1], pressureOf(e, 0)]], last: lp, t: performance.now(), pen: e.pointerType === "pen", ink: 0.6 };
+      drawOverlay();
+      return;
+    }
     if (ED.tool !== "select") {
       drag = { kind: "draw", p0: p, p1: p, start: lp };
       drawOverlay();
@@ -663,6 +677,11 @@
       return;
     }
     const p = toScene(e.clientX, e.clientY);
+    if (sketch) {
+      for (const ev of (e.getCoalescedEvents && e.getCoalescedEvents().length ? e.getCoalescedEvents() : [e])) addSketchPoint(ev);
+      drawOverlay();
+      return;
+    }
     if (pen) { pen.at = p; drawOverlay(); return; }
     if (!drag) {
       if (panning()) { viewport.style.cursor = "grab"; return; }
@@ -755,6 +774,11 @@
       if (viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
       return;
     }
+    if (sketch) {
+      if (viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
+      finishSketch();
+      return;
+    }
     if (!drag) return;
     const d = drag;
     drag = null;
@@ -841,6 +865,40 @@
     else stageMenu({ x: e.clientX, y: e.clientY });
   }
 
+  // ---------- the pencil ----------
+  // A pen reports its pressure; a mouse doesn't, so there it comes from speed: slow strokes press harder.
+  function pressureOf(e, speed) {
+    if (e.pointerType === "pen" && e.pressure > 0) return e.pressure;
+    return Math.max(0.3, Math.min(0.95, 0.95 - speed * 0.22));
+  }
+  function addSketchPoint(e) {
+    const lp = localPoint(e);
+    const dist = Math.hypot(lp[0] - sketch.last[0], lp[1] - sketch.last[1]);
+    if (dist < 1.5) return;
+    const now = e.timeStamp || performance.now(), dt = Math.max(1, now - sketch.t);
+    // Smoothed, so a jittery mouse doesn't make the line throb.
+    const target = pressureOf(e, dist / dt);
+    sketch.ink = sketch.pen ? target : sketch.ink + (target - sketch.ink) * 0.35;
+    const q = toScene(e.clientX, e.clientY);
+    sketch.pts.push([q[0], q[1], sketch.ink]);
+    sketch.last = lp;
+    sketch.t = now;
+  }
+  function finishSketch() {
+    let pts = sketch.pts;
+    const mouse = !sketch.pen;
+    sketch = null;
+    // A click leaves a short dab rather than nothing.
+    if (pts.length < 2) pts = [pts[0], [pts[0][0] + pxToScene(1.5), pts[0][1] + pxToScene(1), pts[0][2]]];
+    if (mouse && pts.length > 3) {
+      // A mouse has no pressure at the ends, so the line tapers in and out as a pencil lifts.
+      const n = pts.length, k = Math.max(2, Math.round(n * 0.12));
+      pts = pts.map((q, i) => { const e = Math.min(1, (i + 0.5) / k, (n - i - 0.5) / k); return [q[0], q[1], q[2] * (0.35 + 0.65 * e)]; });
+    }
+    ACT().pencilStroke(LB.ELEMENTS.pencil.fit(pts, pxToScene(0.6)));
+    drawOverlay();
+  }
+
   // ---------- tools ----------
   const TOOL_TIPS = {
     rect: "Rectangle: drag on the canvas to draw it. Shift keeps the sides equal.",
@@ -849,6 +907,7 @@
     star: "Star: drag on the canvas to draw it.",
     cloud: "Cloud: drag on the canvas to draw it.",
     pen: "Your own outline: click to place points. Click the first point, double-click or press Enter to close it. Backspace takes back the last point.",
+    pencil: "Pencil: draw freehand, with a mouse or a pen. Lines go into the selected layer and are redrawn on every pose, so they boil. Press Escape when you're done.",
     hand: "Pan: drag the canvas around. Space and drag does the same with any tool.",
   };
   const told = new Set();
@@ -868,6 +927,7 @@
   }
   function setTool(t) {
     if (t !== "pen") pen = null;
+    if (t !== "pencil") sketch = null;
     if (t !== "select") setPointEdit(false);
     const changed = ED.tool !== t;
     ED.tool = t;

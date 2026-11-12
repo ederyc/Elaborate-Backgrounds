@@ -493,7 +493,7 @@
 
   // ---------- the shortcut sheet ----------
   const KEYS = [
-    ["Tools", [["V", "Select and move"], ["H", "Pan"], ["R", "Rectangle"], ["E", "Ellipse"], ["T", "Triangle"], ["S", "Star"], ["C", "Cloud"], ["P", "Your own outline"], ["A", "Add pieces"]]],
+    ["Tools", [["V", "Select and move"], ["H", "Pan"], ["R", "Rectangle"], ["E", "Ellipse"], ["T", "Triangle"], ["S", "Star"], ["C", "Cloud"], ["P", "Your own outline"], ["B", "Pencil"], ["A", "Add pieces"]]],
     ["Editing", [["Ctrl Z", "Undo"], ["Ctrl Shift Z", "Redo"], ["Ctrl D", "Duplicate"], ["Del", "Delete"], ["]", "Bring forward"], ["[", "Send backward"], ["Arrows", "Move (Shift: further)"], ["Shift click", "Select several pieces"], ["Ctrl G", "Group them"], ["Ctrl Shift G", "Ungroup"], ["Double-click", "Reach a piece inside a group"], ["Alt drag", "Move without snapping"], ["Shift", "Turn in 15° steps"], ["Esc", "Deselect"]]],
     ["Layers list", [["↑ ↓", "Move between rows"], ["Alt ↑ ↓", "Restack"], ["F2", "Rename"], ["Del", "Delete"]]],
     ["View", [["Ctrl wheel", "Zoom"], ["Wheel", "Pan"], ["Space drag", "Pan"], ["Ctrl 0", "Fit"], ["Ctrl 1", "100%"], ["Ctrl + −", "Zoom in, out"], ["Shift 2", "Zoom to the selection"], ["G", "Screen guides"], ["F", "Present"]]],
@@ -586,7 +586,7 @@
   }
 
   // ---------- shortcuts ----------
-  const TOOLS = { v: "select", h: "hand", r: "rect", e: "ellipse", t: "triangle", s: "star", c: "cloud", p: "pen" };
+  const TOOLS = { v: "select", h: "hand", r: "rect", e: "ellipse", t: "triangle", s: "star", c: "cloud", p: "pen", b: "pencil" };
   function typing(t) {
     return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) && !(t.type === "range" || t.type === "checkbox" || t.type === "color");
   }
@@ -668,10 +668,11 @@
     LB.PANELS.init();
     LB.EXPORT.init();
     initMenubar();
-    // editor.html?open=lilac (or reef, beach, study) opens a sample, ?scene=id a saved scene, and the plain
+    // editor.html?open=lilac (or reef, beach, study, desk, desk-tall) opens a sample, ?scene=id a saved scene, and the plain
     // address the scene worked on last.
     const params = new URLSearchParams(location.search);
-    const SAMPLES = { lilac: ["Lilac Falls", () => LB.DOC.fromLilac()], reef: ["Reef Rave", () => LB.DOC.fromReef()], beach: ["Beach day", () => LB.DOC.fromBeach()], study: ["the garden study", () => LB.DOC.fromStudy()] };
+    const SAMPLES = { lilac: ["Lilac Falls", () => LB.DOC.fromLilac()], reef: ["Reef Rave", () => LB.DOC.fromReef()], beach: ["Beach day", () => LB.DOC.fromBeach()], study: ["the garden study", () => LB.DOC.fromStudy()],
+      desk: ["Desk by the Window", () => LB.DOC.fromDesk()], "desk-tall": ["Desk by the Window, tall", () => LB.DOC.fromDesk(true)] };
     const want = SAMPLES[params.get("open")];
     let first = null, firstId = null, warnings = [], openedSample = null, trouble = "";
     if (want) {

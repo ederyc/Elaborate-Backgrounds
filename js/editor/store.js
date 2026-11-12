@@ -22,7 +22,7 @@
 
   const CAT_LOOK = {
     Shapes: ["shapes", "var(--sun)"], Plants: ["plant", "var(--teal)"], Flowers: ["flower", "var(--pink)"], Beach: ["beach", "var(--sky)"],
-    "3D": ["cube", "var(--lilac)"], Sky: ["sky", "var(--sky)"], "Your images": ["image", "var(--coral)"], "My pieces": ["heart", "var(--pink)"],
+    "3D": ["cube", "var(--lilac)"], Light: ["bulb", "var(--sun)"], Sky: ["sky", "var(--sky)"], "Your images": ["image", "var(--coral)"], "My pieces": ["heart", "var(--pink)"],
   };
   const lookOf = (cat) => CAT_LOOK[cat] || ["box", "var(--lilac)"];
 

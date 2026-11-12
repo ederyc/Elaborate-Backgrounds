@@ -181,8 +181,8 @@
 
   // ---------- live wallpaper ----------
   // The same scripts player.html loads, in order. They're read from this site and written inline.
-  const PLAYER_SCRIPTS = ["js/gl.js", "js/clock.js", "js/materials.js", "js/elements.js", "js/shapes.js", "js/clay.js", "js/items.js", "js/post.js", "js/renderer.js",
-    "js/scenes/garden-art.js", "js/scenes/lilac-art.js", "js/scenes/reef-art.js", "js/editor/doc.js", "js/player.js"];
+  const PLAYER_SCRIPTS = ["js/gl.js", "js/clock.js", "js/materials.js", "js/elements.js", "js/shapes.js", "js/pencil.js", "js/light.js", "js/clay.js", "js/items.js", "js/post.js", "js/renderer.js",
+    "js/scenes/garden-art.js", "js/scenes/lilac-art.js", "js/scenes/reef-art.js", "js/scenes/desk-art.js", "js/editor/doc.js", "js/player.js"];
   const esc = (t) => t.replace(/<\/(script)/gi, "<\\/$1");
   async function exportLiveWallpaper() {
     try {
